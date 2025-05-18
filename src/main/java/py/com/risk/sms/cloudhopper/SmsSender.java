@@ -172,6 +172,8 @@ public class SmsSender {
             submit.setShortMessage(msg.getText().getBytes(StandardCharsets.UTF_8));
 
             logger.info(String.format("Enviar mensaje a [%s] con ID=[%s] y texto=[%s]", msg.getDestination(), msg.getIdMensaje(), msg.getText()));
+            dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.EN_PROCESO_ENVIO, null, null, null);
+
             SubmitSmResp resp = session.submit(submit, 3000);
             logger.info(String.format("Mensaje enviado a [%s] con ID=[%s] y ID_Externo=[%s]", msg.getDestination(), msg.getIdMensaje(), resp.getMessageId()));
 

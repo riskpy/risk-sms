@@ -59,10 +59,14 @@ public class DBService {
             + "                   nvl(?, estado)\r\n"
             + "                END,\r\n"
             + "       codigo_respuesta_envio  = nvl(?, codigo_respuesta_envio),\r\n"
-            + "       respuesta_envio         = nvl(substr(?, 1, 1000),\r\n"
-            + "                                     respuesta_envio),\r\n"
+            + "       respuesta_envio         = nvl(substr(?, 1, 1000), respuesta_envio),\r\n"
             + "       id_externo_envio        = nvl(substr(?, 1, 100), id_externo_envio),\r\n"
-            + "       cantidad_intentos_envio = nvl(cantidad_intentos_envio, 0) + 1,\r\n"
+            + "       cantidad_intentos_envio = CASE\r\n"
+            + "                                   WHEN ? = 'N' THEN\r\n"
+            + "                                    nvl(cantidad_intentos_envio, 0)\r\n"
+            + "                                   ELSE\r\n"
+            + "                                    nvl(cantidad_intentos_envio, 0) + 1\r\n"
+            + "                                 END,\r\n"
             + "       fecha_envio = CASE\r\n"
             + "                       WHEN ? = 'E' THEN\r\n"
             + "                        current_timestamp\r\n"
@@ -189,7 +193,8 @@ public class DBService {
             stmt.setObject(5, respuesta, Types.VARCHAR);
             stmt.setObject(6, idExterno, Types.VARCHAR);
             stmt.setObject(7, estado.getCode(), Types.VARCHAR);
-            stmt.setObject(8, mensajeId, Types.DECIMAL);
+            stmt.setObject(8, estado.getCode(), Types.VARCHAR);
+            stmt.setObject(9, mensajeId, Types.DECIMAL);
 
             stmt.executeUpdate();
         } catch (SQLException e) {
