@@ -16,6 +16,6 @@
     <factorypathentry kind="VARJAR" id="M2_REPO/com/oracle/database/security/osdt_core/19.3.0.0/osdt_core-19.3.0.0.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/com/oracle/database/ha/simplefan/19.3.0.0/simplefan-19.3.0.0.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/com/oracle/database/ha/ons/19.3.0.0/ons-19.3.0.0.jar" enabled="true" runInBatchMode="false"/>
-    <factorypathentry kind="VARJAR" id="M2_REPO/com/zaxxer/HikariCP/3.4.5/HikariCP-3.4.5.jar" enabled="true" runInBatchMode="false"/>
+    <factorypathentry kind="VARJAR" id="M2_REPO/com/zaxxer/HikariCP/4.0.3/HikariCP-4.0.3.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/org/yaml/snakeyaml/1.29/snakeyaml-1.29.jar" enabled="true" runInBatchMode="false"/>
 </factorypath>

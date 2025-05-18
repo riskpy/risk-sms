@@ -9,9 +9,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import com.cloudhopper.smpp.SmppConstants;
 import com.cloudhopper.smpp.SmppSession;
 import com.cloudhopper.smpp.pdu.SubmitSm;
@@ -19,6 +16,8 @@ import com.cloudhopper.smpp.pdu.SubmitSmResp;
 import com.cloudhopper.smpp.type.Address;
 
 import py.com.risk.sms.bd.DBService;
+import py.com.risk.sms.log.SafeLogManager;
+import py.com.risk.sms.log.SafeLogger;
 import py.com.risk.sms.model.SmsMessage;
 
 /**
@@ -33,7 +32,7 @@ import py.com.risk.sms.model.SmsMessage;
  * @version 1.0.0
  */
 public class SmsSender {
-    private static final Logger logger = LogManager.getLogger(SmsSender.class);
+    private static final SafeLogger logger = SafeLogManager.getLogger(SmsSender.class);
 
     private final ExecutorService executor = Executors.newFixedThreadPool(50); // Para envíos paralelos
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1); // Para delay asincrónico
