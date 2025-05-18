@@ -68,6 +68,9 @@ public class RiskSmsApp {
                 ds.getIdleTimeout(),
                 ds.getConnectionTimeout());
 
+        final SmsConfig smsConfig = config.getSms();
+        dbService.setMaximoIntentos(smsConfig.getMaximoIntentos());
+
         final SmppConfig smppConfig = config.getSmpp();
         final SmppSessionManager manager = new SmppSessionManager();
         final SmppSession session = manager.connect(dbService,
@@ -75,8 +78,6 @@ public class RiskSmsApp {
                 smppConfig.getPort(),
                 smppConfig.getSystemId(),
                 smppConfig.getPassword());
-
-        SmsConfig smsConfig = config.getSms();
 
         final SmsSender sender = new SmsSender(session, dbService);
 
@@ -88,7 +89,7 @@ public class RiskSmsApp {
             manager.shutdown();
         }));
 
-        ModoEnvioLotes modoEnvio = smsConfig.getModoEnvioLotes();
+        ModoEnvioLote modoEnvio = smsConfig.getModoEnvioLote();
         final Long intervaloLoteMs = smsConfig.getIntervaloEntreLotesMs();
         int count = 1;
         while (running) {
@@ -124,7 +125,7 @@ public class RiskSmsApp {
                                   ; 
                             break;
                         default:
-                            logger.warn(String.format("[%s] - Modo de envío no reconocido: [%s]. Usando '%s' por defecto.", count, modoEnvio, ModoEnvioLotes.secuencial_espaciado));
+                            logger.warn(String.format("[%s] - Modo de envío no reconocido: [%s]. Usando '%s' por defecto.", count, modoEnvio, ModoEnvioLote.secuencial_espaciado));
                             sender.sendMessagesSequentialWithDelayBlocking(messages, smppConfig.getSendDelayMs());
                     }
                 } else {

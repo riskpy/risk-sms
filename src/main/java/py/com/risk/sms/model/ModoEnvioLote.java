@@ -22,7 +22,7 @@ package py.com.risk.sms.model;
  * @author Damián Meza
  * @version 1.0.0
  */
-public enum ModoEnvioLotes {
+public enum ModoEnvioLote {
     /**
      * Envía todos los mensajes en paralelo sin ningún tipo de retardo.
      */

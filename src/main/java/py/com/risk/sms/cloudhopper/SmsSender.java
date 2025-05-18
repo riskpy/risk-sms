@@ -2,8 +2,11 @@ package py.com.risk.sms.cloudhopper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 
 import org.apache.logging.log4j.LogManager;
@@ -38,6 +41,12 @@ public class SmsSender {
 
     private final SmppSession session;
     private final DBService dbservice;
+    
+    /*
+     * Códigos válidos para reintentos, según el protocolo SMPP estándar
+     * Referencia: https://smpp.org/smpp-error-codes.html
+     */
+    private static final Set<Integer> CODIGOS_REINTENTOS = new HashSet<Integer>(Arrays.asList(-1, 8, 20, 88));
 
     /**
      * Constructor.
@@ -162,18 +171,23 @@ public class SmsSender {
             submit.setDestAddress(new Address((byte) 0x01, (byte) 0x01, msg.getDestination()));
             submit.setShortMessage(msg.getText().getBytes(StandardCharsets.UTF_8));
 
+            logger.info(String.format("Enviar mensaje a [%s] con ID=[%s] y texto=[%s]", msg.getDestination(), msg.getIdMensaje(), msg.getText()));
             SubmitSmResp resp = session.submit(submit, 3000);
-            logger.info(String.format("Enviar mensaje a [%s] con ID: [%s]", msg.getDestination(), resp.getMessageId()));
+            logger.info(String.format("Mensaje enviado a [%s] con ID=[%s] y ID_Externo=[%s]", msg.getDestination(), msg.getIdMensaje(), resp.getMessageId()));
 
             if (resp.getCommandStatus() == SmppConstants.STATUS_OK) {
-                dbservice.actualizarEstadoMensaje(msg.getIdMensaje(), "E", "Enviado correctamente");
+                dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.ENVIADO, resp.getCommandStatus(), resp.getResultMessage(), resp.getMessageId());
             } else {
-                dbservice.actualizarEstadoMensaje(msg.getIdMensaje(), "X", "Error SMPP: " + resp.getCommandStatus());
+                // Dependiendo del tipo de error, se marca como reintento, dejando en estado PENDIENTE_ENVIO
+                if (CODIGOS_REINTENTOS.contains(resp.getCommandStatus()))
+                    dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, resp.getCommandStatus(), resp.getResultMessage(), null);
+                else
+                    dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PROCESADO_ERROR, resp.getCommandStatus(), resp.getResultMessage(), null);
             }
 
         } catch (Exception e) {
             logger.error(String.format("Error al enviar mensaje con ID [%s]: [%s]", msg.getIdMensaje(), e.getMessage()));
-            dbservice.actualizarEstadoMensaje(msg.getIdMensaje(), "X", "Excepción: " + e.getMessage());
+            dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, 999999, "Excepción: " + e.getMessage(), null);
         }
     }
 

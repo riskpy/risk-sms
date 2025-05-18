@@ -21,8 +21,9 @@ datasource:
 
 # Configuraciones de negocio para el envio de SMS
 sms:
-  telefonia: TEL                        # Operadora telefonica. Opcional
-  clasificacion: AVISO                  # Clasificacion: ALERTA, AVISO, PROMOCION (u otros). Opcional
-  cantidadMaximaPorLote: 100            # Cantidad maxima de SMS a enviar por lote. Opcional. Por defecto 100
-  modoEnvioLotes: secuencial_espaciado  # Modo de envío: paralelo, paralelo_espaciado, secuencial_espaciado, secuencial_espaciado_async
-  intervaloEntreLotesMs: 10000          # Tiempo de espera entre lotes de SMS a enviar (en milisegundos)
+  telefonia: TEL                       # Operadora telefonica. Opcional
+  clasificacion: AVISO                 # Clasificacion: ALERTA, AVISO, PROMOCION (u otros). Opcional
+  cantidadMaximaPorLote: 100           # Cantidad maxima de SMS a enviar por lote. Opcional. Por defecto 100
+  modoEnvioLote: secuencial_espaciado  # Modo de envío: paralelo, paralelo_espaciado, secuencial_espaciado, secuencial_espaciado_async
+  intervaloEntreLotesMs: 10000         # Tiempo de espera entre lotes de SMS a enviar (en milisegundos)
+  maximoIntentos: 5                    # Número máximo de intentos de envío permitidos de SMS. Opcional. Por defecto 5

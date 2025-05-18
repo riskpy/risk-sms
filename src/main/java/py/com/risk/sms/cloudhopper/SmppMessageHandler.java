@@ -1,5 +1,6 @@
 package py.com.risk.sms.cloudhopper;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -90,8 +91,9 @@ public class SmppMessageHandler extends DefaultSmppSessionHandler {
         String from = deliverSm.getSourceAddress().getAddress();
         String to = deliverSm.getDestAddress().getAddress();
 
-        logger.info(String.format("MO recibido de [%s] a [%s]: [%s]", from, to, msg));
-        dbservice.guardarMensajeRecibido(from, to, msg);
+        logger.info(String.format("MO recibido de [%s] a [%s] con texto=[%s]", from, to, msg));
+        BigDecimal messageId = dbservice.saveReceivedMessage(from, to, msg);
+        logger.info(String.format("MO recibido de [%s] a [%s] con texto=[%s] registrado con id=[%s]", from, to, msg, messageId));
     }
 
     /**
