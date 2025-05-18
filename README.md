@@ -1,7 +1,9 @@
 
 # Risk SMS Gateway
 **`risk-sms`** es una herramienta desarrollada en Java para el envío y recepción de mensajes SMS, diseñada como **parte del ecosistema [risk](https://github.com/jtsoya539/risk)** y pensada para ser integrada de forma nativa con su módulo de _Mensajería_.
+
 Además, gracias a su arquitectura modular, puede **adaptarse fácilmente a otros entornos o sistemas que requieran funcionalidades similares**.
+
 Utiliza la librería [Cloudhopper SMPP](https://github.com/fizzed/cloudhopper-smpp) para la comunicación con gateways de SMS mediante el protocolo SMPP, y [HikariCP](https://github.com/brettwooldridge/HikariCP) para la gestión eficiente de conexiones a base de datos Oracle.
 
 ---

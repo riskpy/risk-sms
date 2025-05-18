@@ -47,7 +47,7 @@ public class DBService {
     public List<SmsMessage> loadPendingMessages(String sourceAddr, String telephony, String clasification, int maxSize) throws SQLException {
         List<SmsMessage> list = new ArrayList<>();
         //String query = "SELECT id_mensaje, '0972109201' origen, '0972244176' destino, contenido mensaje FROM t_mensajes WHERE estado = 'P'";
-        String query = String.format("select a.mensaje_iid id_mensaje, '0972109201' origen, telefono_destino destino, mensaje mensaje from cp_men_enviados a where a.mensaje_iid in (258533879, 258533805)");
+        String query = String.format("select a.mensaje_iid id_mensaje, '0972109201' origen, telefono_destino destino, mensaje mensaje from t_mensajes a where a.mensaje_iid in (258533879, 258533805)");
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query);
@@ -69,7 +69,7 @@ public class DBService {
     }
     
     public void actualizarEstadoMensaje(BigDecimal mensajeId, String estado, String descripcion) {
-        String query = "UPDATE cp_men_enviados SET estado = ? WHERE mensaje_iid = ?";
+        String query = "UPDATE t_mensajes SET estado = ? WHERE mensaje_iid = ?";
 
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement stmt = conn.prepareStatement(query)) {
