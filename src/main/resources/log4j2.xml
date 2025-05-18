@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+<Appenders>
+    <!-- Consola: nivel DEBUG+ -->
+    <Console name="Console" target="SYSTEM_OUT">
+        <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} [%t] %-5p %c{1} - %msg%n"/>
+        <Filters>
+            <ThresholdFilter level="debug" onMatch="ACCEPT" onMismatch="DENY"/>
+        </Filters>
+		<ImmediateFlush>true</ImmediateFlush>
+    </Console>
+
+    <!-- Archivo: solo INFO o superior -->
+    <RollingFile name="FileAppender"
+                 fileName="logs/risk-sms.log"
+                 filePattern="logs/risk-sms-%d{yyyy-MM-dd}-%i.log.gz">
+        <PatternLayout>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</pattern>
+        </PatternLayout>
+        <Filters>
+            <ThresholdFilter level="info" onMatch="ACCEPT" onMismatch="DENY"/>
+        </Filters>
+        <Policies>
+            <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+            <SizeBasedTriggeringPolicy size="300MB"/>
+        </Policies>
+        <DefaultRolloverStrategy max="7">
+            <Delete basePath="logs" maxDepth="1">
+                <IfFileName glob="risk-sms-*.log.gz" />
+                <IfLastModified age="7d" />
+            </Delete>
+        </DefaultRolloverStrategy>
+		<ImmediateFlush>true</ImmediateFlush>
+    </RollingFile>
+
+    <Async name="AsyncFile">
+        <AppenderRef ref="FileAppender"/>
+    </Async>
+</Appenders>
+
+<Loggers>
+    <!-- Log específico para Hikari -->
+    <Logger name="com.zaxxer.hikari" level="warn" additivity="false">
+      <AppenderRef ref="Console"/>
+      <AppenderRef ref="AsyncFile"/>
+    </Logger>
+
+    <!-- Log específico para Cloudhopper -->
+    <Logger name="com.cloudhopper.smpp" level="warn" additivity="false">
+        <AppenderRef ref="Console"/>
+        <AppenderRef ref="AsyncFile"/>
+    </Logger>
+
+    <!-- Logg raíz: todos los demás logs a nivel más bajo para que los appenders filtren -->
+    <Root level="debug">
+        <AppenderRef ref="Console"/>
+        <AppenderRef ref="AsyncFile"/>
+    </Root>
+</Loggers>
+</Configuration>
