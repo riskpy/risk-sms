@@ -101,7 +101,7 @@ target/risk-sms.jar
 ## ▶️ Ejecución
 Para ejecutar el JAR:
 ```bash
-java -Xms500M -Xmx500M -XX:MaxDirectMemorySize=250M -server -XX:+UseG1GC  -XX:+ExplicitGCInvokesConcurrent -XX:MaxGCPauseMillis=500 -jar target/risk-sms.jar
+java -Xms500M -Xmx500M -XX:MaxDirectMemorySize=250M -server -XX:+UseG1GC -XX:+ExplicitGCInvokesConcurrent -XX:MaxGCPauseMillis=500 -jar target/risk-sms.jar
 ```
 Por defecto, busca el archivo `config/risk-sms.yml`.
 
