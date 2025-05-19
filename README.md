@@ -9,7 +9,7 @@ Utiliza la librería [Cloudhopper SMPP](https://github.com/fizzed/cloudhopper-sm
 ---
 
 ## 🚀 Funcionalidades principales
-* 📤Envío de mensajes SMS a través de SMPP.
+* 📤Envío de mensajes SMS a través de **múltiples** servicios SMPP.
 * 📩Recepción de mensajes entrantes (MO - _Mobile Originated_).
 * 📬Procesamiento de acuses de entrega (DLR - _Delivery Receipt_).
 * 🗃️Lectura y escritura desde/hacia una base de datos Oracle.
@@ -45,7 +45,9 @@ risk-sms/
 ---
 
 ## ⚙️ Configuración
-El archivo de configuración está ubicado en `config/risk-sms.yml`, pero **no debe versionarse** porque puede contener credenciales. En su lugar, se incluye un archivo de ejemplo:
+El archivo de configuración inicialmente está preparado para configurar una conexión a base de datos, y múltiples conexiones a SMPP.
+
+Está ubicado en `config/risk-sms.yml`, pero **no debe versionarse** porque puede contener credenciales. En su lugar, se incluye un archivo de ejemplo:
 ```bash
 cp config/risk-sms.yml.example config/risk-sms.yml
 ```
