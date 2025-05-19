@@ -3,7 +3,9 @@ package py.com.risk.sms.config;
 import py.com.risk.sms.model.ModoEnvioLote;
 
 public class SmsConfig {
-	// Operadora telefonica. Opcional
+	// Nombre del preveedor de SMS
+    private String nombre;
+    // Operadora telefonica. Opcional
     private String telefonia;
     // Clasificacion: ALERTA, AVISO, PROMOCION (u otros). Opcional
     private String clasificacion;
@@ -15,8 +17,16 @@ public class SmsConfig {
     private Long intervaloEntreLotesMs;
     // Número máximo de intentos de envío permitidos de SMS. Opcional. Por defecto 5
     private Integer maximoIntentos;
+    // Configuracion de conexion al gateway
+    private SmppConfig smpp;
 
-    public String getTelefonia() {
+    public String getNombre() {
+		return nombre;
+	}
+	public void setNombre(String nombre) {
+		this.nombre = nombre;
+	}
+	public String getTelefonia() {
 		return telefonia;
 	}
 	public void setTelefonia(String telefonia) {
@@ -52,5 +62,10 @@ public class SmsConfig {
 	public void setMaximoIntentos(Integer maximoIntentos) {
 		this.maximoIntentos = maximoIntentos;
 	}
-
+	public SmppConfig getSmpp() {
+		return smpp != null ? smpp : new SmppConfig();
+	}
+	public void setSmpp(SmppConfig smpp) {
+		this.smpp = smpp;
+	}
 }

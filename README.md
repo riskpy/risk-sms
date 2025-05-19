@@ -52,15 +52,6 @@ cp config/risk-sms.yml.example config/risk-sms.yml
 Edita el archivo `config/risk-sms.yml` con los valores adecuados para tu entorno:
 ```yml
 # Ejemplo: config/risk-sms.yml
-# Conexion al Gateway para envio y recepcion de SMS
-smpp:
-  host: host.com.py
-  port: 54321
-  systemId: systemId
-  password: password
-  sourceAdress: 09751000000
-  sendDelayMs: 50  # Tiempo de espera entre envíos consecutivos de SMS (en milisegundos). Util para cumplir con límites del proveedor SMPP o evitar sobrecarga. Por defecto 500
-
 # Conexion a la base de datos
 datasource:
   serverName: serverName.com.py
@@ -75,12 +66,37 @@ datasource:
 
 # Configuraciones de negocio para el envio de SMS
 sms:
-  telefonia: TEL                       # Operadora telefonica. Opcional
-  clasificacion: AVISO                 # Clasificacion: ALERTA, AVISO, PROMOCION (u otros). Opcional
-  cantidadMaximaPorLote: 100           # Cantidad maxima de SMS a enviar por lote. Opcional. Por defecto 100
-  modoEnvioLote: secuencial_espaciado  # Modo de envío: paralelo, paralelo_espaciado, secuencial_espaciado, secuencial_espaciado_async
-  intervaloEntreLotesMs: 10000         # Tiempo de espera entre lotes de SMS a enviar (en milisegundos)
-  maximoIntentos: 5                    # Número máximo de intentos de envío permitidos de SMS. Opcional. Por defecto 5
+  - nombre: TEL-OTP
+    telefonia: TEL                       # Operadora telefonica. Opcional
+    clasificacion: OTP                   # Clasificacion: OTP, AVISO, PROMOCION (u otros). Opcional
+    cantidadMaximaPorLote: 100           # Cantidad maxima de SMS a enviar por lote. Opcional. Por defecto 100
+    modoEnvioLote: secuencial_espaciado  # Modo de envío: paralelo, paralelo_espaciado, secuencial_espaciado, secuencial_espaciado_async
+    intervaloEntreLotesMs: 10000         # Tiempo de espera entre lotes de SMS a enviar (en milisegundos)
+    maximoIntentos: 5                    # Número máximo de intentos de envío permitidos de SMS. Opcional. Por defecto 5
+    # Conexion al Gateway
+    smpp:
+      host: host.com.py
+      port: 54321
+      systemId: systemId
+      password: password
+      sourceAdress: 09751000000
+      sendDelayMs: 50  # Tiempo de espera entre envíos consecutivos de SMS (en milisegundos). Util para cumplir con límites del proveedor SMPP o evitar sobrecarga. Por defecto 500
+
+  - nombre: TEL-AVISO
+    telefonia: TEL
+    clasificacion: AVISO
+    cantidadMaximaPorLote: 100
+    modoEnvioLote: secuencial_espaciado
+    intervaloEntreLotesMs: 10000
+    maximoIntentos: 5
+    # Conexion al Gateway
+    smpp:
+      host: host.com.py
+      port: 54321
+      systemId: systemId
+      password: password
+      sourceAdress: 09751000000
+      sendDelayMs: 50
 ```
 > ⚠️ **Importante:** No compartas ni subas el archivo `risk-sms.yml` real al repositorio.
 

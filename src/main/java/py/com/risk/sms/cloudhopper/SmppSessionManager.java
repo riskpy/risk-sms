@@ -6,6 +6,7 @@ import com.cloudhopper.smpp.SmppSessionConfiguration;
 import com.cloudhopper.smpp.impl.DefaultSmppClient;
 
 import py.com.risk.sms.bd.DBService;
+import py.com.risk.sms.config.SmppConfig;
 
 /**
  * Manager para la sesión SMPP.
@@ -48,7 +49,7 @@ public class SmppSessionManager {
      * de mensajes recibidos.
      * </p>
      * 
-     * @param dbservice Servicio para acceso a base de datos, que será usado por el handler.
+     * @param dbService Servicio para acceso a base de datos, que será usado por el handler.
      * @param host Dirección del servidor SMPP.
      * @param port Puerto del servidor SMPP.
      * @param systemId Identificador del sistema para autenticación SMPP.
@@ -56,7 +57,7 @@ public class SmppSessionManager {
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(DBService dbservice, String host, int port, String systemId, String password) throws Exception {
+    public SmppSession connect(DBService dbService, String host, int port, String systemId, String password) throws Exception {
         SmppSessionConfiguration config = new SmppSessionConfiguration();
         config.setName(String.format("SMPP-RiskSession-%s", systemId));
         config.setType(SmppBindType.TRANSCEIVER);
@@ -67,8 +68,29 @@ public class SmppSessionManager {
         config.setInterfaceVersion((byte) 0x34);
         config.getLoggingOptions().setLogBytes(true);
 
-        session = defaultClient.bind(config, new SmppMessageHandler(dbservice));
+        session = defaultClient.bind(config, new SmppMessageHandler(dbService));
         return session;
+    }
+
+    /**
+     * Establece una conexión SMPP tipo TRANSCEIVER.
+     * <p>
+     * Configura los parámetros de conexión (host, puerto, credenciales) y
+     * crea la sesión SMPP, asociando un {@link SmppMessageHandler} para manejo
+     * de mensajes recibidos.
+     * </p>
+     * 
+     * @param dbService Servicio para acceso a base de datos, que será usado por el handler.
+     * @param smppConfig Contiene la configuración de conexión al servidor SMPP.
+     * @return La sesión SMPP establecida.
+     * @throws Exception Si la conexión o el bind falla.
+     */
+    public SmppSession connect(DBService dbService, SmppConfig smppConfig) throws Exception {
+        return this.connect(dbService,
+                smppConfig.getHost(),
+                smppConfig.getPort(),
+                smppConfig.getSystemId(),
+                smppConfig.getPassword());
     }
 
     /**

@@ -18,6 +18,7 @@ import com.cloudhopper.smpp.type.Address;
 import py.com.risk.sms.bd.DBService;
 import py.com.risk.sms.log.SafeLogManager;
 import py.com.risk.sms.log.SafeLogger;
+import py.com.risk.sms.model.ModoEnvioLote;
 import py.com.risk.sms.model.SmsMessage;
 
 /**
@@ -56,6 +57,53 @@ public class SmsSender {
     public SmsSender(SmppSession session, DBService dbservice) {
         this.session = session;
         this.dbservice = dbservice;
+    }
+
+    /**
+     * Enrutador principal para el envío de mensajes SMS según el modo especificado.
+     * 
+     * Este método actúa como un "dispatcher" y selecciona la estrategia de envío
+     * adecuada basada en el valor de {@link ModoEnvioLote}, incluyendo:
+     * <ul>
+     *     <li>{@code paralelo}: Envío en paralelo sin delay (no bloqueante).</li>
+     *     <li>{@code paralelo_espaciado}: Envío en paralelo con delay entre mensajes (no bloqueante).</li>
+     *     <li>{@code secuencial_espaciado}: Envío secuencial con delay entre mensajes (bloqueante).</li>
+     *     <li>{@code secuencial_espaciado_async}: Envío secuencial asincrónico con delay (no bloqueante).</li>
+     * </ul>
+     * 
+     * Si se especifica un modo no reconocido, se utilizará {@code secuencial_espaciado} por defecto.
+     * 
+     * @param modoEnvio El modo de envío a aplicar.
+     * @param messages Lista de mensajes a enviar.
+     * @param delayMs Delay entre envíos, usado en los modos que lo permiten. Si es menor o igual a cero, se usará un valor por defecto.
+     */
+    public void sendMessages(ModoEnvioLote modoEnvio, List<SmsMessage> messages, long delayMs) {
+        switch (modoEnvio) {
+            case paralelo:
+                this.sendMessagesInParallelNonBlocking(messages);
+                break;
+            case paralelo_espaciado:
+                this.sendMessagesInParallelWithDelayNonBlocking(messages, delayMs);
+                break;
+            case secuencial_espaciado:
+                this.sendMessagesSequentialWithDelayBlocking(messages, delayMs);
+                break;
+            case secuencial_espaciado_async:
+                this.sendMessagesSequentialWithDelayAsync(messages, delayMs)
+                      .whenComplete((res, ex) -> {
+                          if (ex != null) {
+                              logger.error(String.format("Error en envío secuencial async: [%s]", ex.getMessage()));
+                          } else {
+                              logger.info(String.format("Envío secuencial async completado"));
+                          }
+                      })
+                      //.join() // Descomentar si se desea esperar a que termine antes de seguir
+                      ; 
+                break;
+            default:
+                logger.warn(String.format("Modo de envío no reconocido: [%s]. Usando '%s' por defecto.", modoEnvio, ModoEnvioLote.secuencial_espaciado));
+                this.sendMessagesSequentialWithDelayBlocking(messages, delayMs);
+        }
     }
 
     /**

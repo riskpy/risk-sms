@@ -3,6 +3,7 @@ package py.com.risk.sms.bd;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
+import py.com.risk.sms.config.DataSourceConfig;
 import py.com.risk.sms.model.SmsMessage;
 
 import java.math.BigDecimal;
@@ -110,6 +111,21 @@ public class DBService {
         config.setConnectionTimeout(connectionTimeout);
 
         this.dataSource = new HikariDataSource(config);
+    }
+
+    /**
+     * Inicializa el servicio con configuración personalizada del pool de conexiones.
+     *
+     * @param dataSourceConfig    Contiene la configuración de conexión a la base de datos
+     */
+    public DBService(DataSourceConfig dataSourceConfig) {
+        this(dataSourceConfig.getJdbcUrl(),
+        		dataSourceConfig.getUser(),
+        		dataSourceConfig.getPassword(),
+        		dataSourceConfig.getMaximumPoolSize(),
+        		dataSourceConfig.getMinimumIdle(),
+        		dataSourceConfig.getIdleTimeout(),
+        		dataSourceConfig.getConnectionTimeout());    	
     }
 
     /**
