@@ -76,11 +76,13 @@ public class DBService {
             + "                     END\r\n"
             + " WHERE id_mensaje = ?";
 
-    private static final String QUERY_INSERTAR_MENSAJE_RECIBIDO = "INSERT INTO t_mensajes_recibidos\r\n"
-            + "  (origen, destino, mensaje)\r\n"
+    private static final String QUERY_INSERTAR_MENSAJE_RECIBIDO = "BEGIN\n"
+            + "INSERT INTO t_mensajes_recibidos\r\n"
+            + "  (numero_telefono_origen, numero_telefono_destino, contenido)\r\n"
             + "VALUES\r\n"
             + "  (?, ?, ?)\r\n"
-            + "RETURNING id_mensaje INTO ?";
+            + "RETURNING id_mensaje INTO ?;\n"
+            + "END;";
 
     /**
      * Inicializa el servicio con configuración personalizada del pool de conexiones.
