@@ -20,6 +20,7 @@ import py.com.risk.sms.log.SafeLogManager;
 import py.com.risk.sms.log.SafeLogger;
 import py.com.risk.sms.model.ModoEnvioLote;
 import py.com.risk.sms.model.SmsMessage;
+import py.com.risk.sms.util.ContextAwareThreadFactory;
 
 /**
  * Clase para envío de mensajes SMS usando SMPP con Cloudhopper.
@@ -35,8 +36,8 @@ import py.com.risk.sms.model.SmsMessage;
 public class SmsSender {
     private static final SafeLogger logger = SafeLogManager.getLogger(SmsSender.class);
 
-    private final ExecutorService executor = Executors.newFixedThreadPool(50); // Para envíos paralelos
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1); // Para delay asincrónico
+    private final ExecutorService executor = Executors.newFixedThreadPool(50, new ContextAwareThreadFactory()); // Para envíos paralelos
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new ContextAwareThreadFactory()); // Para delay asincrónico
     private static final long DEFAULT_DELAY_MS = 500;
 
     private final SmppSession session;

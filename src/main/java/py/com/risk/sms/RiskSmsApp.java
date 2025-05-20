@@ -7,6 +7,7 @@ import py.com.risk.sms.cloudhopper.SmppSessionManager;
 import py.com.risk.sms.cloudhopper.SmsSender;
 import py.com.risk.sms.config.*;
 import py.com.risk.sms.model.*;
+import py.com.risk.sms.util.ContextAwareThreadFactory;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -69,7 +70,7 @@ public class RiskSmsApp {
         final DataSourceConfig ds = config.getDatasource();
 
         List<SmsConfig> smsConfigs = config.getSms();
-        ExecutorService executor = Executors.newFixedThreadPool(smsConfigs.size());
+        ExecutorService executor = Executors.newFixedThreadPool(smsConfigs.size(), new ContextAwareThreadFactory());
 
         // Agregar hook para apagar limpiamente
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
