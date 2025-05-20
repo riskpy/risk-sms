@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.ThreadContext;
 
 import com.cloudhopper.smpp.impl.DefaultSmppSessionHandler;
 import com.cloudhopper.smpp.pdu.DeliverSm;
@@ -39,15 +40,22 @@ public class SmppMessageHandler extends DefaultSmppSessionHandler {
     private static final Logger logger = LogManager.getLogger(SmppMessageHandler.class);
 
     private final DBService dbservice;
+    
+    /**
+     * Nombre del servicio levantado para enviar/recibir SMS hacia/desde el Gateway SMPP
+     */
+    private final String service;
 
     /**
      * Constructor que recibe el servicio para acceso a base de datos.
      * 
+     * @param service Nombre del servicio levantado para enviar/recibir SMS.
      * @param dbservice Instancia de {@link DBService} para operaciones sobre la base de datos.
      */
-    public SmppMessageHandler(DBService dbservice) {
+    public SmppMessageHandler(String service, DBService dbservice) {
         super();
         this.dbservice = dbservice;
+        this.service = service;
     }
 
     /**
@@ -62,6 +70,7 @@ public class SmppMessageHandler extends DefaultSmppSessionHandler {
      */
     @Override
     public PduResponse firePduRequestReceived(PduRequest pduRequest) {
+    	ThreadContext.put("servicio", service);
         if (pduRequest instanceof DeliverSm) {
             DeliverSm deliverSm = (DeliverSm) pduRequest;
 

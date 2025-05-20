@@ -49,6 +49,7 @@ public class SmppSessionManager {
      * de mensajes recibidos.
      * </p>
      * 
+     * @param service Nombre del servicio levantado para enviar/recibir SMS.
      * @param dbService Servicio para acceso a base de datos, que será usado por el handler.
      * @param host Dirección del servidor SMPP.
      * @param port Puerto del servidor SMPP.
@@ -57,7 +58,7 @@ public class SmppSessionManager {
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(DBService dbService, String host, int port, String systemId, String password) throws Exception {
+    public SmppSession connect(String service, DBService dbService, String host, int port, String systemId, String password) throws Exception {
         SmppSessionConfiguration config = new SmppSessionConfiguration();
         config.setName(String.format("SMPP-RiskSession-%s", systemId));
         config.setType(SmppBindType.TRANSCEIVER);
@@ -68,7 +69,7 @@ public class SmppSessionManager {
         config.setInterfaceVersion((byte) 0x34);
         config.getLoggingOptions().setLogBytes(true);
 
-        session = defaultClient.bind(config, new SmppMessageHandler(dbService));
+        session = defaultClient.bind(config, new SmppMessageHandler(service, dbService));
         return session;
     }
 
@@ -80,13 +81,15 @@ public class SmppSessionManager {
      * de mensajes recibidos.
      * </p>
      * 
+     * @param service Nombre del servicio levantado para enviar/recibir SMS.
      * @param dbService Servicio para acceso a base de datos, que será usado por el handler.
      * @param smppConfig Contiene la configuración de conexión al servidor SMPP.
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(DBService dbService, SmppConfig smppConfig) throws Exception {
-        return this.connect(dbService,
+    public SmppSession connect(String service, DBService dbService, SmppConfig smppConfig) throws Exception {
+        return this.connect(service,
+                dbService,
                 smppConfig.getHost(),
                 smppConfig.getPort(),
                 smppConfig.getSystemId(),
