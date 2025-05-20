@@ -5,7 +5,7 @@ public class SmppConfig {
     private Integer port;
     private String systemId;
     private String password;
-    private String sourceAdress;
+    private String sourceAddress;
     // Tiempo de espera entre envíos consecutivos de SMS (en milisegundos).
     // Util para cumplir con límites del proveedor SMPP o evitar sobrecarga. Por defecto 500
     private Long sendDelayMs;
@@ -34,11 +34,11 @@ public class SmppConfig {
 	public void setPassword(String password) {
 		this.password = password;
 	}
-	public String getSourceAdress() {
-		return sourceAdress;
+	public String getSourceAddress() {
+		return sourceAddress;
 	}
-	public void setSourceAdress(String sourceAdress) {
-		this.sourceAdress = sourceAdress;
+	public void setSourceAddress(String sourceAddress) {
+		this.sourceAddress = sourceAddress;
 	}
 	public Long getSendDelayMs() {
 		return sendDelayMs != null ? sendDelayMs : 500; // por defecto 500ms

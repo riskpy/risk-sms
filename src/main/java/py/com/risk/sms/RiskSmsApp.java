@@ -147,7 +147,7 @@ public class RiskSmsApp {
             ThreadContext.put("contador", String.valueOf(count)); // actualiza el contador por lote para contexto de log
             try {
                 List<SmsMessage> messages = dbService.loadPendingMessages(
-                        smppConfig.getSourceAdress(),
+                        smppConfig.getSourceAddress(),
                         smsConfig.getTelefonia(),
                         smsConfig.getClasificacion(),
                         smsConfig.getCantidadMaximaPorLote());

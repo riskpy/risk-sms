@@ -81,7 +81,7 @@ sms:
       port: 54321
       systemId: systemId
       password: password
-      sourceAdress: 09751000000
+      sourceAddress: 09751000000
       sendDelayMs: 50  # Tiempo de espera entre envíos consecutivos de SMS (en milisegundos). Util para cumplir con límites del proveedor SMPP o evitar sobrecarga. Por defecto 500
 
   - nombre: TEL-AVISO
@@ -97,7 +97,7 @@ sms:
       port: 54321
       systemId: systemId
       password: password
-      sourceAdress: 09751000000
+      sourceAddress: 09751000000
       sendDelayMs: 50
 ```
 > ⚠️ **Importante:** No compartas ni subas el archivo `risk-sms.yml` real al repositorio.
