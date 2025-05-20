@@ -141,9 +141,10 @@ public class RiskSmsApp {
         ModoEnvioLote modoEnvio = smsConfig.getModoEnvioLote();
         Long sendDelayMs = smppConfig.getSendDelayMs();
         final Long intervaloLoteMs = smsConfig.getIntervaloEntreLotesMs();
-        int count = 1;
 
+        int count = 1;
         while (running) {
+            ThreadContext.put("contador", String.valueOf(count)); // actualiza el contador por lote para contexto de log
             try {
                 List<SmsMessage> messages = dbService.loadPendingMessages(
                         smppConfig.getSourceAdress(),
@@ -152,20 +153,20 @@ public class RiskSmsApp {
                         smsConfig.getCantidadMaximaPorLote());
 
                 if (!messages.isEmpty()) {
-                	logger.info(String.format("[%s] Mensajes pendientes para enviar: [%s], Modo de envio: [%s].", count, messages.size(), modoEnvio));
+                	logger.info(String.format("Mensajes pendientes para enviar: [%s], Modo de envio: [%s].", messages.size(), modoEnvio));
                     sender.sendMessages(modoEnvio, messages, sendDelayMs);
                 } else {
-                	logger.info(String.format("[%s] - No se encontraron mensajes pendientes para enviar", count));
+                	logger.info(String.format("No se encontraron mensajes pendientes para enviar"));
                 }
 
-                logger.info(String.format("[%s] - Tomando un descanso de [%s] ms...", count, intervaloLoteMs));
+                logger.info(String.format("Tomando un descanso de [%s] ms...", intervaloLoteMs));
                 Thread.sleep(intervaloLoteMs);
-                logger.info(String.format("[%s] - Descanso terminado. Reintentando lectura de mensajes...", count));
+                logger.info(String.format("Descanso terminado. Reintentando lectura de mensajes..."));
             } catch (Exception e) {
-            	logger.error(String.format("[%s] - Error al procesar lote de mensajes: [%s]", count, e.getMessage()));
-            	logger.info(String.format("[%s] - Tomando un descanso de [%s] ms...", count, intervaloLoteMs));
+            	logger.error(String.format("Error al procesar lote de mensajes: [%s]", e.getMessage()));
+            	logger.info(String.format("Tomando un descanso de [%s] ms...", intervaloLoteMs));
                 Thread.sleep(intervaloLoteMs);
-                logger.info(String.format("[%s] - Descanso terminado. Reintentando lectura de mensajes...", count));
+                logger.info(String.format("Descanso terminado. Reintentando lectura de mensajes..."));
             }
             count = (count >= 100) ? 1 : count + 1;
         }

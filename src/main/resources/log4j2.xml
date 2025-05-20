@@ -3,7 +3,7 @@
 <Appenders>
     <!-- Consola: nivel DEBUG+ -->
     <Console name="Console" target="SYSTEM_OUT">
-        <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} [%t] %-5p %X{servicio} %c{1} - %msg%n"/>
+        <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} [%t] %-5p %X{servicio} [%X{contador}] [%X{idMensaje}] %c{1} - %msg%n"/>
         <Filters>
             <ThresholdFilter level="debug" onMatch="ACCEPT" onMismatch="DENY"/>
         </Filters>
@@ -14,7 +14,7 @@
                  fileName="logs/risk-sms.log"
                  filePattern="logs/risk-sms-%d{yyyy-MM-dd}-%i.log.gz">
         <PatternLayout>
-            <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %X{servicio} %logger{36} - %msg%n</Pattern>
+            <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %X{servicio} [%X{contador}] [%X{idMensaje}] %logger{36} - %msg%n</Pattern>
         </PatternLayout>
         <Filters>
             <ThresholdFilter level="info" onMatch="ACCEPT" onMismatch="DENY"/>
@@ -43,7 +43,7 @@
                              fileName="logs/risk-sms-${ctx:servicio}.log"
                              filePattern="logs/risk-sms-${ctx:servicio}-%d{yyyy-MM-dd}-%i.log.gz">
                     <PatternLayout>
-                        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %X{servicio} %logger{36} - %msg%n</Pattern>
+                        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %X{servicio} [%X{contador}] [%X{idMensaje}] %logger{36} - %msg%n</Pattern>
                     </PatternLayout>
                     <Policies>
                         <TimeBasedTriggeringPolicy interval="1" modulate="true"/>

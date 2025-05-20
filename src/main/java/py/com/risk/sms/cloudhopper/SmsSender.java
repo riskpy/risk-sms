@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 
+import org.apache.logging.log4j.ThreadContext;
+
 import com.cloudhopper.smpp.SmppConstants;
 import com.cloudhopper.smpp.SmppSession;
 import com.cloudhopper.smpp.pdu.SubmitSm;
@@ -42,7 +44,7 @@ public class SmsSender {
 
     private final SmppSession session;
     private final DBService dbservice;
-    
+
     /*
      * Códigos válidos para reintentos, según el protocolo SMPP estándar
      * Referencia: https://smpp.org/smpp-error-codes.html
@@ -120,8 +122,9 @@ public class SmsSender {
      * </pre>
      */
     public void sendMessagesInParallelNonBlocking(List<SmsMessage> messages) {
+    	String count = ThreadContext.get("contador");
         for (SmsMessage msg : messages) {
-            executor.submit(() -> sendSingleMessage(msg));
+            executor.submit(() -> sendSingleMessage(msg, count));
         }
     }
 
@@ -190,8 +193,9 @@ public class SmsSender {
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
         long delay = delayMs > 0 ? delayMs : DEFAULT_DELAY_MS;
 
+    	String count = ThreadContext.get("contador");
         for (SmsMessage msg : messages) {
-            future = future.thenRunAsync(() -> sendSingleMessage(msg), executor)
+            future = future.thenRunAsync(() -> sendSingleMessage(msg, count), executor)
                            .thenCompose(v -> delayAsync(delay));
         }
 
@@ -212,18 +216,21 @@ public class SmsSender {
      * Envía un solo mensaje vía SMPP, actualizando el estado en base de datos.
      * Maneja excepciones y loguea los eventos.
      */
-    private void sendSingleMessage(SmsMessage msg) {
+    private void sendSingleMessage(SmsMessage msg, String count) {
+        ThreadContext.put("contador", count);
+    	ThreadContext.put("idMensaje", String.valueOf(msg.getIdMensaje()));
+
         try {
             SubmitSm submit = new SubmitSm();
             submit.setSourceAddress(new Address((byte) 0x01, (byte) 0x01, msg.getSource()));
             submit.setDestAddress(new Address((byte) 0x01, (byte) 0x01, msg.getDestination()));
             submit.setShortMessage(msg.getText().getBytes(StandardCharsets.UTF_8));
 
-            logger.info(String.format("Enviar mensaje a [%s] con ID=[%s] y texto=[%s]", msg.getDestination(), msg.getIdMensaje(), msg.getText()));
+            logger.info(String.format("Enviar mensaje a [%s] con texto=[%s]", msg.getDestination(), msg.getText()));
             dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.EN_PROCESO_ENVIO, null, null, null);
 
             SubmitSmResp resp = session.submit(submit, 3000);
-            logger.info(String.format("Mensaje enviado a [%s] con ID=[%s] y ID_Externo=[%s]", msg.getDestination(), msg.getIdMensaje(), resp.getMessageId()));
+            logger.info(String.format("Mensaje enviado a [%s] con IdExterno=[%s]", msg.getDestination(), resp.getMessageId()));
 
             if (resp.getCommandStatus() == SmppConstants.STATUS_OK) {
                 dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.ENVIADO, resp.getCommandStatus(), resp.getResultMessage(), resp.getMessageId());
@@ -236,8 +243,11 @@ public class SmsSender {
             }
 
         } catch (Exception e) {
-            logger.error(String.format("Error al enviar mensaje con ID [%s]: [%s]", msg.getIdMensaje(), e.getMessage()));
+            logger.error(String.format("Error al enviar mensaje: [%s]", e.getMessage()));
             dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, 999999, "Excepción: " + e.getMessage(), null);
+        } finally {
+        	ThreadContext.remove("idMensaje");
+        	ThreadContext.remove("contador");
         }
     }
 
@@ -272,11 +282,12 @@ public class SmsSender {
         }
 
         public void start() {
+        	String count = ThreadContext.get("contador");
             future = scheduler.scheduleWithFixedDelay(() -> {
                 try {
                     if (iterator.hasNext()) {
                         SmsMessage msg = iterator.next();
-                        sendSingleMessage(msg);
+                        sendSingleMessage(msg, count);
                     } else {
                         future.cancel(false);
                     }
