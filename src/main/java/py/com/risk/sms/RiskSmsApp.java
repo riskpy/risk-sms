@@ -154,7 +154,8 @@ public class RiskSmsApp {
 
                 if (!messages.isEmpty()) {
                 	logger.info(String.format("Mensajes pendientes para enviar: [%s], Modo de envio: [%s].", messages.size(), modoEnvio));
-                    sender.sendMessages(modoEnvio, messages, sendDelayMs);
+                    dbService.updateMessagesStatus(messages, SmsMessage.Status.EN_PROCESO_ENVIO);
+                	sender.sendMessages(modoEnvio, messages, sendDelayMs);
                 } else {
                 	logger.info(String.format("No se encontraron mensajes pendientes para enviar"));
                 }
