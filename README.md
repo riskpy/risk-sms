@@ -18,7 +18,7 @@ Utiliza la librería [Cloudhopper SMPP](https://github.com/fizzed/cloudhopper-sm
 ---
 
 ## 🧱 Requisitos
-- Java 8 o superior
+- Java 17 o superior
 - Maven 3.6+
 - Acceso a un gateway SMPP válido
 - **Base de datos Oracle accesible**, con las siguientes tablas disponibles:

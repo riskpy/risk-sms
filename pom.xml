@@ -10,6 +10,19 @@
   <name>Risk SMS Gateway</name>
   <description>Envío y recepción de SMS para el sistema Risk usando Cloudhopper</description>
 
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>oracle</id>
+      <name>Oracle JDBC Repository</name>
+      <url>https://repo.maven.apache.org/maven2</url>
+    </repository>
+  </repositories>
+
   <dependencies>
 
     <!-- SLF4J to Log4j2 bridge -->
@@ -45,17 +58,22 @@
       <version>3.2.10.Final</version>
     </dependency>
 
-    <dependency>
+    <!-- <dependency>
       <groupId>com.oracle.database.jdbc</groupId>
       <artifactId>ojdbc8</artifactId>
       <version>19.3.0.0</version>
+    </dependency> -->
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc11</artifactId>
+      <version>21.7.0.0</version> <!-- o más reciente compatible -->
     </dependency>
 
     <dependency>
       <groupId>com.zaxxer</groupId>
       <artifactId>HikariCP</artifactId>
-      <version>4.0.3</version> <!-- Para java 8 -->
-      <!-- <version>5.1.0</version> --> <!-- Para java 17 -->
+      <!-- <version>4.0.3</version> --> <!-- Para java 8 -->
+      <version>5.1.0</version> <!-- Para java 17 -->
     </dependency>
 
     <dependency>
@@ -75,10 +93,9 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.8.1</version>
+        <version>3.10.1</version> <!-- Asegura soporte para Java 17 -->
         <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
+          <release>17</release>
         </configuration>
       </plugin>
 
