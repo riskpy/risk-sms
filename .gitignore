@@ -1,6 +1,7 @@
 /target/
 /lib/
 .classpath
+.factorypath
 .settings/
 .project
 /config/risk-sms.yml
