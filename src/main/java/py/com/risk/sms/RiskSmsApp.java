@@ -131,7 +131,7 @@ public class RiskSmsApp {
 
         final SmppConfig smppConfig = smsConfig.getSmpp();
         final SmppSessionManager sessionManager = new SmppSessionManager();
-        final SmppSession session = sessionManager.connect(smsConfig.getNombre(), dbService, smppConfig);
+        final SmppSession session = sessionManager.connect(smsConfig.getNombre(), dbService, smsConfig);
 
         final SmsSender sender = new SmsSender(session, dbService);
 

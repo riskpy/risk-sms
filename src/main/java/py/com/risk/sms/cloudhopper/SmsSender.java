@@ -23,6 +23,7 @@ import py.com.risk.sms.log.SafeLogger;
 import py.com.risk.sms.model.ModoEnvioLote;
 import py.com.risk.sms.model.SmsMessage;
 import py.com.risk.sms.util.ContextAwareThreadFactory;
+import py.com.risk.sms.util.SmppLatencyStats;
 
 /**
  * Clase para envío de mensajes SMS usando SMPP con Cloudhopper.
@@ -44,6 +45,8 @@ public class SmsSender {
 
     private final SmppSession session;
     private final DBService dbservice;
+
+    private static final SmppLatencyStats SMPP_LATENCY = new SmppLatencyStats(100); // Reporta cada 100 envíos
 
     /*
      * Códigos válidos para reintentos, según el protocolo SMPP estándar
@@ -229,8 +232,17 @@ public class SmsSender {
             logger.info(String.format("Enviar mensaje a [%s] con texto=[%s]", msg.getDestination(), msg.getText()));
             //dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.EN_PROCESO_ENVIO, null, null, null);
 
+            // Medición de latencia de envío
+            long inicio = System.currentTimeMillis();
+
             SubmitSmResp resp = session.submit(submit, 3000);
-            logger.info(String.format("Mensaje enviado a [%s] con IdExterno=[%s]", msg.getDestination(), resp.getMessageId()));
+
+            long fin = System.currentTimeMillis();
+            long duracionMs = fin - inicio;
+
+            SMPP_LATENCY.record(duracionMs); // Acumula la estadística
+
+            logger.info(String.format("Mensaje enviado a [%s] con IdExterno=[%s] (latencia: %d ms)", msg.getDestination(), resp.getMessageId(), duracionMs));
 
             if (resp.getCommandStatus() == SmppConstants.STATUS_OK) {
                 dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.ENVIADO, resp.getCommandStatus(), resp.getResultMessage(), resp.getMessageId());

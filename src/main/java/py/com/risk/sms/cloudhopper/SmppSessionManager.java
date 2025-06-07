@@ -7,6 +7,7 @@ import com.cloudhopper.smpp.impl.DefaultSmppClient;
 
 import py.com.risk.sms.bd.DBService;
 import py.com.risk.sms.config.SmppConfig;
+import py.com.risk.sms.config.SmsConfig;
 
 /**
  * Manager para la sesión SMPP.
@@ -55,10 +56,11 @@ public class SmppSessionManager {
      * @param port Puerto del servidor SMPP.
      * @param systemId Identificador del sistema para autenticación SMPP.
      * @param password Contraseña para autenticación SMPP.
+     * @param windowSize Cantidad de envíos simultáneos permitidos en una ventana de conexión SMPP.
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(String service, DBService dbService, String host, int port, String systemId, String password) throws Exception {
+    public SmppSession connect(String service, DBService dbService, String host, int port, String systemId, String password, Integer windowSize) throws Exception {
         SmppSessionConfiguration config = new SmppSessionConfiguration();
         config.setName(String.format("SMPP-RiskSession-%s", systemId));
         config.setType(SmppBindType.TRANSCEIVER);
@@ -68,6 +70,13 @@ public class SmppSessionManager {
         config.setPassword(password);
         config.setInterfaceVersion((byte) 0x34);
         config.getLoggingOptions().setLogBytes(true);
+
+        config.setWindowSize(windowSize);
+        //config.setRequestExpiryTimeout(10000);      // Tiempo que espera antes de considerar que el proveedor no respondió
+        //config.setWindowMonitorInterval(15000);     // Intervalo para revisar expiraciones
+        //config.setConnectTimeout(5000);             // Tiempo para conectar
+        //config.setBindTimeout(5000);                // Tiempo para esperar el bind
+        //config.setWriteTimeout(2000);               // Tiempo para escribir en socket
 
         session = defaultClient.bind(config, new SmppMessageHandler(service, dbService));
         return session;
@@ -87,13 +96,15 @@ public class SmppSessionManager {
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(String service, DBService dbService, SmppConfig smppConfig) throws Exception {
+    public SmppSession connect(String service, DBService dbService, SmsConfig smsConfig) throws Exception {
+        SmppConfig smppConfig = smsConfig.getSmpp();
         return this.connect(service,
                 dbService,
                 smppConfig.getHost(),
                 smppConfig.getPort(),
                 smppConfig.getSystemId(),
-                smppConfig.getPassword());
+                smppConfig.getPassword(),
+                smsConfig.getCantidadMaximaPorLote());
     }
 
     /**
