@@ -26,7 +26,7 @@
         <DefaultRolloverStrategy max="7">
             <Delete basePath="logs" maxDepth="1">
                 <IfFileName glob="risk-sms-*.log.gz" />
-                <IfLastModified age="7d" />
+                <IfLastModified age="3d" />
             </Delete>
         </DefaultRolloverStrategy>
     </RollingFile>
@@ -49,7 +49,41 @@
                         <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
                         <SizeBasedTriggeringPolicy size="300MB"/>
                     </Policies>
-                    <DefaultRolloverStrategy max="7"/>
+                    <DefaultRolloverStrategy max="7">
+                        <Delete basePath="logs" maxDepth="1">
+                            <IfFileName glob="risk-sms-*.log.gz" />
+                            <IfLastModified age="3d" />
+                        </Delete>
+                    </DefaultRolloverStrategy>
+                </RollingFile>
+            </Route>
+        </Routes>
+    </Routing>
+
+    <!-- RoutingAppender para logs de latencia SMPP por servicio -->
+    <Routing name="SmppLatencyRouting">
+        <Routes pattern="$${ctx:servicio}">
+            <!-- Route por defecto -->
+            <Route key="default" ref="IgnoreLogs" />
+
+            <!-- Route dinámico por servicio -->
+            <Route>
+                <RollingFile name="SmppLatencyLog"
+                            fileName="logs/risk-smpp-latency-${ctx:servicio}.log"
+                            filePattern="logs/risk-smpp-latency-${ctx:servicio}-%d{yyyy-MM-dd}-%i.log.gz">
+                    <PatternLayout>
+                        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %X{servicio} - %msg%n</Pattern>
+                    </PatternLayout>
+                    <Policies>
+                        <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                        <SizeBasedTriggeringPolicy size="300MB"/>
+                    </Policies>
+                    <DefaultRolloverStrategy max="7">
+                        <Delete basePath="logs" maxDepth="1">
+                            <IfFileName glob="risk-smpp-latency-*.log.gz"/>
+                            <IfLastModified age="3d"/>
+                        </Delete>
+                    </DefaultRolloverStrategy>
                 </RollingFile>
             </Route>
         </Routes>
@@ -63,6 +97,11 @@
     <!-- Async para Routing -->
     <Async name="AsyncRouting">
         <AppenderRef ref="ServicioRouting"/>
+    </Async>
+
+    <!-- Async para Routing de latencia SMPP -->
+    <Async name="AsyncSmppLatencyRouting">
+        <AppenderRef ref="SmppLatencyRouting"/>
     </Async>
 
     <!-- Null para Routing con servicio 'default' -->
@@ -82,6 +121,12 @@
         <AppenderRef ref="Console"/>
         <AppenderRef ref="AsyncFile"/>
         <AppenderRef ref="AsyncRouting"/>
+    </Logger>
+
+    <Logger name="py.com.risk.sms.util.SmppLatencyStats" level="info" additivity="false">
+        <AppenderRef ref="Console"/>
+        <AppenderRef ref="AsyncRouting"/>
+        <AppenderRef ref="AsyncSmppLatencyRouting"/>
     </Logger>
 
     <!-- Logger raíz -->
