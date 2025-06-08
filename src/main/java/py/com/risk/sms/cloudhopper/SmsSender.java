@@ -1,6 +1,7 @@
 package py.com.risk.sms.cloudhopper;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -41,12 +42,14 @@ public class SmsSender {
 
     private final ExecutorService executor = Executors.newFixedThreadPool(50, new ContextAwareThreadFactory()); // Para envíos paralelos
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new ContextAwareThreadFactory()); // Para delay asincrónico
-    private static final long DEFAULT_DELAY_MS = 500;
+
+    private static final Duration DEFAULT_DELAY_MS = Duration.ofMillis(500);
+    private static final Duration TIMEOUT_3_SEGUNDOS = Duration.ofSeconds(3);
 
     private final SmppSession session;
     private final DBService dbservice;
 
-    private static final SmppLatencyStats SMPP_LATENCY = new SmppLatencyStats(100); // Reporta cada 100 envíos
+    private final SmppLatencyStats latencyStats;
 
     /*
      * Códigos válidos para reintentos, según el protocolo SMPP estándar
@@ -60,9 +63,10 @@ public class SmsSender {
      * @param session Sesión SMPP activa para envío de mensajes.
      * @param dbservice Servicio para actualización de estados en base de datos.
      */
-    public SmsSender(SmppSession session, DBService dbservice) {
+    public SmsSender(SmppSession session, DBService dbservice, SmppLatencyStats latencyStats) {
         this.session = session;
         this.dbservice = dbservice;
+        this.latencyStats = latencyStats;
     }
 
     /**
@@ -146,7 +150,8 @@ public class SmsSender {
      * @param delayMs Delay en milisegundos entre cada envío.
      */
     public void sendMessagesInParallelWithDelayNonBlocking(List<SmsMessage> messages, long delayMs) {
-        new ParallelWithDelaySender(new ArrayList<>(messages), delayMs > 0 ? delayMs : DEFAULT_DELAY_MS).start();
+        new ParallelWithDelaySender(
+                new ArrayList<>(messages), delayMs > 0 ? delayMs : DEFAULT_DELAY_MS.toMillis()).start();
     }
 
     /**
@@ -194,7 +199,7 @@ public class SmsSender {
      */
     public CompletableFuture<Void> sendMessagesSequentialWithDelayAsync(List<SmsMessage> messages, long delayMs) {
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
-        long delay = delayMs > 0 ? delayMs : DEFAULT_DELAY_MS;
+        long delay = delayMs > 0 ? delayMs : DEFAULT_DELAY_MS.toMillis();
 
     	String count = ThreadContext.get("contador");
         for (SmsMessage msg : messages) {
@@ -235,12 +240,12 @@ public class SmsSender {
             // Medición de latencia de envío
             long inicio = System.currentTimeMillis();
 
-            SubmitSmResp resp = session.submit(submit, 3000);
+            SubmitSmResp resp = session.submit(submit, TIMEOUT_3_SEGUNDOS.toMillis());
 
             long fin = System.currentTimeMillis();
             long duracionMs = fin - inicio;
 
-            SMPP_LATENCY.record(duracionMs); // Acumula la estadística
+            latencyStats.record(duracionMs); // Acumula la estadística
 
             logger.info(String.format("Mensaje enviado a [%s] con IdExterno=[%s] (latencia: %d ms)", msg.getDestination(), resp.getMessageId(), duracionMs));
 

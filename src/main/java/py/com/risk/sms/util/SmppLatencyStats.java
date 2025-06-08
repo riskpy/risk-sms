@@ -60,6 +60,10 @@ public class SmppLatencyStats {
     private final AtomicLong totalMin = new AtomicLong(Long.MAX_VALUE);
     private final AtomicLong totalMax = new AtomicLong(Long.MIN_VALUE);
 
+    // Estadísticas acumuladas de timeouts (históricas)
+    private final AtomicLong totalTimeoutCount = new AtomicLong(0);
+    private final AtomicLong totalTimeoutTotalElapsed = new AtomicLong(0);
+
     // Estadísticas por ventana
     private final AtomicLong windowCount = new AtomicLong(0);
     private final AtomicLong windowTime = new AtomicLong(0);
@@ -102,7 +106,12 @@ public class SmppLatencyStats {
         }
     }
 
-    /**
+    public void recordTimeout(long elapsedMs) {
+        totalTimeoutCount.incrementAndGet();
+        totalTimeoutTotalElapsed.addAndGet(elapsedMs);
+    }
+
+/**
      * Reinicia las estadísticas de la ventana actual de mediciones.
      * 
      * <p>
@@ -135,6 +144,9 @@ public class SmppLatencyStats {
         long tMin = totalMin.get();
         long tMax = totalMax.get();
 
+        long tc = totalTimeoutCount.get();
+        double avgTimeout = tc > 0 ? (double) totalTimeoutTotalElapsed.get() / tc : 0.0;
+
         long wCount = windowCount.get();
         long wTotal = windowTime.get();
         double wAvg = wCount > 0 ? (double) wTotal / wCount : 0.0;
@@ -142,9 +154,9 @@ public class SmppLatencyStats {
         long wMin = windowMin.get();
         long wMax = windowMax.get();
 
-        logger.info(String.format("[LATENCIA SMPP TOTAL]    total=%d  avg=%.2f ms  min=%d ms  max=%d ms",
-                tCount, tAvg, tMin, tMax));
-        logger.info(String.format("[LATENCIA SMPP VENTANA]  total=%d  avg=%.2f ms  min=%d ms  max=%d ms",
+        logger.info(String.format("[LATENCIA SMPP TOTAL]    total=%d  avg=%.2fms  min=%dms  max=%dms timeouts=%d avgTimeout=%.2fms",
+                tCount, tAvg, tMin, tMax, tc, avgTimeout));
+        logger.info(String.format("[LATENCIA SMPP VENTANA]  total=%d  avg=%.2fms  min=%dms  max=%dms",
                 wCount, wAvg, wMin, wMax));
     }
 }
