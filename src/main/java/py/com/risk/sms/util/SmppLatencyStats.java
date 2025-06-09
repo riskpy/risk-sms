@@ -1,66 +1,69 @@
 package py.com.risk.sms.util;
 
 import java.util.concurrent.atomic.AtomicLong;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Clase utilitaria para el monitoreo de latencias de respuesta en envíos SMPP.
- * 
- * <p>Mantiene estadísticas acumuladas totales y estadísticas por ventana.</p>
- 
+ * Clase utilitaria para el monitoreo y análisis estadístico de latencias
+ * en las respuestas de envíos SMPP (submit_sm -> submit_sm_resp).
+ *
  * <p>
- * Esta clase permite registrar el tiempo de latencia (en milisegundos) entre
- * el envío de un mensaje SMS y la recepción del `submit_sm_resp` correspondiente,
- * acumulando estadísticas clave como:
+ * Esta clase acumula tanto estadísticas históricas como estadísticas
+ * temporales (por ventana de observación), permitiendo detectar
+ * cuellos de botella, degradaciones de servicio o picos de latencia.
  * </p>
+ *
+ * <p>
+ * A partir de la versión 2.0, también registra estadísticas de
+ * <b>timeouts</b>, es decir, mensajes que nunca recibieron respuesta
+ * y fueron liberados manualmente por el monitor de ventana SMPP.
+ * </p>
+ *
+ * <p>
+ * Las estadísticas registradas incluyen:
  * <ul>
- *   <li>Total de mensajes registrados</li>
- *   <li>Tiempo mínimo, máximo y promedio de respuesta</li>
+ *   <li>Total de mensajes enviados con respuesta</li>
+ *   <li>Latencia mínima, máxima y promedio (total y por ventana)</li>
+ *   <li>Total de timeouts y su tiempo promedio</li>
  * </ul>
- * 
- * <p>
- * El objetivo principal es detectar cuellos de botella o degradación
- * del proveedor SMPP a través de mediciones no invasivas que se realizan
- * en tiempo de ejecución.
  * </p>
- * 
+ *
  * <p>
- * Cada vez que se alcanza un múltiplo del parámetro {@code reportEvery},
- * se emite un log con el resumen estadístico acumulado hasta ese momento.
+ * Esta clase es thread-safe y puede ser compartida entre múltiples hilos concurrentes.
+ * Se recomienda instanciar una por proveedor/SMPP session.
  * </p>
- * 
- * <p>
- * Esta clase es thread-safe gracias al uso de variables atómicas,
- * y puede ser compartida entre múltiples hilos concurrentes.
- * </p>
- * 
+ *
  * <pre>
  * Ejemplo de uso:
  * 
- *   private static final SmppLatencyStats stats = new SmppLatencyStats(100);
+ *   SmppLatencyStats stats = new SmppLatencyStats(100);
  * 
- *   long inicio = System.currentTimeMillis();
+ *   long t0 = System.currentTimeMillis();
  *   SubmitSmResp resp = session.submit(request, 3000);
- *   long fin = System.currentTimeMillis();
- * 
- *   stats.record(fin - inicio);
+ *   long t1 = System.currentTimeMillis();
+ *   stats.record(t1 - t0);
  * </pre>
- * 
- * @author Damian
+ *
+ * <p>Para timeouts manuales detectados por un {@link SmppWindowMonitor}:</p>
+ * <pre>
+ *   stats.recordTimeout(elapsedMs);
+ * </pre>
+ *
+ * @author Damián Meza
+ * @version 2.0.0
  */
 public class SmppLatencyStats {
 
     private static final Logger logger = LogManager.getLogger(SmppLatencyStats.class);
 
-    // Estadísticas acumuladas (históricas)
+    // Estadísticas acumuladas de respuestas exitosas
     private final AtomicLong totalCount = new AtomicLong(0);
     private final AtomicLong totalTime = new AtomicLong(0);
     private final AtomicLong totalMin = new AtomicLong(Long.MAX_VALUE);
     private final AtomicLong totalMax = new AtomicLong(Long.MIN_VALUE);
 
-    // Estadísticas acumuladas de timeouts (históricas)
+    // Estadísticas acumuladas de timeouts
     private final AtomicLong totalTimeoutCount = new AtomicLong(0);
     private final AtomicLong totalTimeoutTotalElapsed = new AtomicLong(0);
 
@@ -70,31 +73,31 @@ public class SmppLatencyStats {
     private final AtomicLong windowMin = new AtomicLong(Long.MAX_VALUE);
     private final AtomicLong windowMax = new AtomicLong(Long.MIN_VALUE);
 
-    /** Frecuencia con la que se reportan las estadísticas */
+    /** Umbral de cantidad de registros necesarios para emitir un resumen por log */
     private final int reportEvery;
 
     /**
      * Constructor principal.
-     * 
-     * @param reportEvery cantidad de registros necesarios para emitir un log de resumen
+     *
+     * @param reportEvery Cantidad de registros tras la cual se imprimirá un resumen de latencia
      */
     public SmppLatencyStats(int reportEvery) {
         this.reportEvery = reportEvery;
     }
 
     /**
-     * Registra una nueva medición de latencia.
-     * 
-     * @param latencyMs latencia en milisegundos del envío-response SMPP
+     * Registra una nueva latencia de respuesta exitosa submit_sm -> submit_sm_resp.
+     *
+     * @param latencyMs Tiempo en milisegundos que tardó en llegar la respuesta
      */
     public void record(long latencyMs) {
-        // Acumulativo
+        // Estadísticas totales
         totalCount.incrementAndGet();
         totalTime.addAndGet(latencyMs);
         totalMin.updateAndGet(prev -> Math.min(prev, latencyMs));
         totalMax.updateAndGet(prev -> Math.max(prev, latencyMs));
 
-        // Por ventana
+        // Estadísticas por ventana
         long currentWindow = windowCount.incrementAndGet();
         windowTime.addAndGet(latencyMs);
         windowMin.updateAndGet(prev -> Math.min(prev, latencyMs));
@@ -106,23 +109,22 @@ public class SmppLatencyStats {
         }
     }
 
+    /**
+     * Registra un nuevo timeout detectado (es decir, slot que fue liberado sin respuesta).
+     *
+     * @param elapsedMs Tiempo que el slot estuvo esperando antes de ser cancelado
+     */
     public void recordTimeout(long elapsedMs) {
         totalTimeoutCount.incrementAndGet();
         totalTimeoutTotalElapsed.addAndGet(elapsedMs);
     }
 
-/**
-     * Reinicia las estadísticas de la ventana actual de mediciones.
-     * 
+    /**
+     * Reinicia las estadísticas de la ventana actual.
+     *
      * <p>
-     * Este método borra el contador de mensajes y restablece los valores
-     * de latencia mínima, máxima y total correspondientes al ciclo reciente,
-     * permitiendo que se acumulen nuevos datos para una nueva ventana de análisis.
-     * </p>
-     * 
-     * <p>
-     * Es utilizado internamente al alcanzar el umbral de {@code reportEvery},
-     * para proporcionar estadísticas periódicas independientes entre sí.
+     * Este método se ejecuta automáticamente tras {@code reportEvery}
+     * llamadas al método {@link #record}, para iniciar una nueva ventana de análisis.
      * </p>
      */
     private void resetWindow() {
@@ -133,8 +135,8 @@ public class SmppLatencyStats {
     }
 
     /**
-     * Imprime un resumen estadístico en el log cuando se alcanza la cantidad
-     * configurada de mediciones.
+     * Imprime un resumen estadístico tanto total como por ventana
+     * en el archivo de log configurado.
      */
     private void report() {
         long tCount = totalCount.get();
@@ -154,7 +156,7 @@ public class SmppLatencyStats {
         long wMin = windowMin.get();
         long wMax = windowMax.get();
 
-        logger.info(String.format("[LATENCIA SMPP TOTAL]    total=%d  avg=%.2fms  min=%dms  max=%dms timeouts=%d avgTimeout=%.2fms",
+        logger.info(String.format("[LATENCIA SMPP TOTAL]    total=%d  avg=%.2fms  min=%dms  max=%dms  timeouts=%d  avgTimeout=%.2fms",
                 tCount, tAvg, tMin, tMax, tc, avgTimeout));
         logger.info(String.format("[LATENCIA SMPP VENTANA]  total=%d  avg=%.2fms  min=%dms  max=%dms",
                 wCount, wAvg, wMin, wMax));

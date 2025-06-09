@@ -76,6 +76,7 @@ public class SmppSessionManager {
      * @param systemId Identificador del sistema para autenticación SMPP.
      * @param password Contraseña para autenticación SMPP.
      * @param windowSize Cantidad de envíos simultáneos permitidos en una ventana de conexión SMPP.
+     * @param latencyStats Objeto opcional de estadísticas de latencia para registrar los timeouts
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
@@ -126,6 +127,7 @@ public class SmppSessionManager {
      * @param service Nombre del servicio levantado para enviar/recibir SMS.
      * @param dbService Servicio para acceso a base de datos, que será usado por el handler.
      * @param smppConfig Contiene la configuración de conexión al servidor SMPP.
+     * @param latencyStats Objeto opcional de estadísticas de latencia para registrar los timeouts
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
