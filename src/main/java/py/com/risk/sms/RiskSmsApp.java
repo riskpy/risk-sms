@@ -8,6 +8,7 @@ import py.com.risk.sms.cloudhopper.SmsSender;
 import py.com.risk.sms.config.*;
 import py.com.risk.sms.model.*;
 import py.com.risk.sms.util.ContextAwareThreadFactory;
+import py.com.risk.sms.util.SmppLatencyStats;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -129,11 +130,17 @@ public class RiskSmsApp {
         final DBService dbService = new DBService(dsConfig);
         dbService.setMaximoIntentos(smsConfig.getMaximoIntentos());
 
+        final SmppLatencyStats latencyStats = new SmppLatencyStats(100);
+
         final SmppConfig smppConfig = smsConfig.getSmpp();
         final SmppSessionManager sessionManager = new SmppSessionManager();
-        final SmppSession session = sessionManager.connect(smsConfig.getNombre(), dbService, smsConfig);
+        final SmppSession session = sessionManager.connect(
+                smsConfig.getNombre(),
+                dbService,
+                smsConfig,
+                latencyStats);
 
-        final SmsSender sender = new SmsSender(session, dbService);
+        final SmsSender sender = new SmsSender(session, dbService, latencyStats);
 
         senderList.add(sender);
         sessionManagerList.add(sessionManager);

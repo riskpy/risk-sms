@@ -1,5 +1,14 @@
 package py.com.risk.sms.cloudhopper;
 
+import java.time.Duration;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.ThreadContext;
+
 import com.cloudhopper.smpp.SmppBindType;
 import com.cloudhopper.smpp.SmppSession;
 import com.cloudhopper.smpp.SmppSessionConfiguration;
@@ -8,6 +17,8 @@ import com.cloudhopper.smpp.impl.DefaultSmppClient;
 import py.com.risk.sms.bd.DBService;
 import py.com.risk.sms.config.SmppConfig;
 import py.com.risk.sms.config.SmsConfig;
+import py.com.risk.sms.util.SmppLatencyStats;
+import py.com.risk.sms.util.SmppWindowMonitor;
 
 /**
  * Manager para la sesión SMPP.
@@ -31,9 +42,17 @@ import py.com.risk.sms.config.SmsConfig;
  * @version 1.0.0
  */
 public class SmppSessionManager {
-    
+
+    private static final Logger logger = LogManager.getLogger(SmppSessionManager.class);
+
+    private static final Duration INICIO_15_SEGUNDOS = Duration.ofSeconds(15);
+    private static final Duration TIMEOUT_30_SEGUNDOS = Duration.ofSeconds(30);
+
     private DefaultSmppClient defaultClient;
     private SmppSession session;
+
+    private ScheduledExecutorService scheduler;
+    private SmppWindowMonitor windowMonitor;
 
     /**
      * Constructor que inicializa el cliente SMPP.
@@ -57,10 +76,12 @@ public class SmppSessionManager {
      * @param systemId Identificador del sistema para autenticación SMPP.
      * @param password Contraseña para autenticación SMPP.
      * @param windowSize Cantidad de envíos simultáneos permitidos en una ventana de conexión SMPP.
+     * @param latencyStats Objeto opcional de estadísticas de latencia para registrar los timeouts
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(String service, DBService dbService, String host, int port, String systemId, String password, Integer windowSize) throws Exception {
+    public SmppSession connect(
+            String service, DBService dbService, String host, int port, String systemId, String password, Integer windowSize, SmppLatencyStats latencyStats) throws Exception {
         SmppSessionConfiguration config = new SmppSessionConfiguration();
         config.setName(String.format("SMPP-RiskSession-%s", systemId));
         config.setType(SmppBindType.TRANSCEIVER);
@@ -79,6 +100,19 @@ public class SmppSessionManager {
         //config.setWriteTimeout(2000);               // Tiempo para escribir en socket
 
         session = defaultClient.bind(config, new SmppMessageHandler(service, dbService));
+
+        this.windowMonitor = new SmppWindowMonitor(TIMEOUT_30_SEGUNDOS.toMillis(), latencyStats); // 30s de umbral
+        this.scheduler = Executors.newSingleThreadScheduledExecutor();
+
+        scheduler.scheduleAtFixedRate(() -> {
+            ThreadContext.put("servicio", service);
+            try {
+                windowMonitor.inspectAndClean(session);
+            } catch (Exception e) {
+                logger.warn("Error en inspección de ventana SMPP", e);
+            }
+        }, INICIO_15_SEGUNDOS.getSeconds(), TIMEOUT_30_SEGUNDOS.getSeconds(), TimeUnit.SECONDS);
+
         return session;
     }
 
@@ -93,10 +127,11 @@ public class SmppSessionManager {
      * @param service Nombre del servicio levantado para enviar/recibir SMS.
      * @param dbService Servicio para acceso a base de datos, que será usado por el handler.
      * @param smppConfig Contiene la configuración de conexión al servidor SMPP.
+     * @param latencyStats Objeto opcional de estadísticas de latencia para registrar los timeouts
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(String service, DBService dbService, SmsConfig smsConfig) throws Exception {
+    public SmppSession connect(String service, DBService dbService, SmsConfig smsConfig, SmppLatencyStats latencyStats) throws Exception {
         SmppConfig smppConfig = smsConfig.getSmpp();
         return this.connect(service,
                 dbService,
@@ -104,7 +139,8 @@ public class SmppSessionManager {
                 smppConfig.getPort(),
                 smppConfig.getSystemId(),
                 smppConfig.getPassword(),
-                smsConfig.getCantidadMaximaPorLote());
+                smsConfig.getCantidadMaximaPorLote(),
+                latencyStats);
     }
 
     /**
@@ -114,6 +150,10 @@ public class SmppSessionManager {
      * </p>
      */
     public void shutdown() {
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.shutdownNow();
+        }
+
         if (session != null) session.unbind(5000);
         if (defaultClient != null) defaultClient.destroy();
     }
