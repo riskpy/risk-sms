@@ -50,7 +50,7 @@ public class SmppWindowMonitor {
      * Contador de slots liberados manualmente durante la última inspección.
      * Utilizado únicamente para logging informativo.
      */
-    private final AtomicInteger slotsLiberados = new AtomicInteger(0);
+    private final AtomicInteger liberatedSlots = new AtomicInteger(0);
 
     /**
      * Referencia opcional a un recolector de estadísticas de latencia,
@@ -58,15 +58,27 @@ public class SmppWindowMonitor {
      */
     private final SmppLatencyStats latencyStats;
 
+    private final Runnable onRebindCallback;
+
+    private static final int HISTORY_MAX = 10; // cantidad de inspecciones a considerar
+    private static final int MIN_CRITICAL_OCCURRENCES = 5; // mínimo de eventos críticos para disparar rebind
+    private static final double SATURATION_THRESHOLD = 0.5; // umbral de saturación para considerarlo crítico
+
+    private final boolean[] criticalHistory = new boolean[HISTORY_MAX];
+    private int totalCritical = 0;
+    private int historyIndex = 0;
+
     /**
      * Constructor principal.
      * 
      * @param timeoutThresholdMs Umbral de tiempo (en milisegundos) para cancelar un slot colgado
      * @param latencyStats Objeto opcional de estadísticas de latencia para registrar los timeouts
+     * @param onRebindCallback Callback que se ejecutará si se detecta condición crítica persistente
      */
-    public SmppWindowMonitor(long timeoutThresholdMs, SmppLatencyStats latencyStats) {
+    public SmppWindowMonitor(long timeoutThresholdMs, SmppLatencyStats latencyStats, Runnable onRebindCallback) {
         this.timeoutThresholdMs = timeoutThresholdMs;
         this.latencyStats = latencyStats;
+        this.onRebindCallback = onRebindCallback;
     }
 
     /**
@@ -94,7 +106,7 @@ public class SmppWindowMonitor {
                 (Map<Integer, WindowFuture<Integer, Object, Object>>) (Map<?, ?>) window.createSortedSnapshot();
 
         int size = snapshot.size();
-        slotsLiberados.set(0);
+        liberatedSlots.set(0);
 
         long now = System.currentTimeMillis();
 
@@ -108,7 +120,7 @@ public class SmppWindowMonitor {
                 if (elapsed > timeoutThresholdMs) {
                     try {
                         window.cancel(seqNum);
-                        slotsLiberados.incrementAndGet();
+                        liberatedSlots.incrementAndGet();
                         logger.warn("[VENTANA LIBERADA] Seq={} sin respuesta desde {} ms. Slot liberado manualmente.",
                                 seqNum, elapsed);
                     } catch (Exception ex) {
@@ -123,6 +135,65 @@ public class SmppWindowMonitor {
         }
 
         logger.info("[WINDOW MONITOR] Total slots ocupados={}, slots liberados={} (umbral={}ms)",
-                size, slotsLiberados.get(), timeoutThresholdMs);
+                size, liberatedSlots.get(), timeoutThresholdMs);
+
+        this.evaluateDegradation(window);
     }
+
+    /**
+     * Evalúa si existe una condición de degradación persistente en la ventana SMPP.
+     * 
+     * <p>
+     * Esta lógica complementa la inspección puntual de slots colgados, manteniendo
+     * un historial circular de las últimas inspecciones críticas. El objetivo es
+     * detectar patrones sostenidos de saturación antes de disparar una acción automática
+     * de recuperación (como {@code rebind()}).
+     * </p>
+     * 
+     * <p>
+     * El criterio de decisión se basa en:
+     * <ul>
+     *   <li>Se considera una inspección como "crítica" si {@code SATURATION_THRESHOLD}% o más de los slots
+     *       de la ventana fueron liberados manualmente por timeout.</li>
+     *   <li>Se mantiene un historial binario de tamaño {@code HISTORY_MAX}, donde
+     *       se registran las inspecciones críticas recientes.</li>
+     *   <li>Si la cantidad de ocurrencias críticas supera {@code MIN_CRITICAL_OCCURRENCES},
+     *       se considera que hay una degradación persistente.</li>
+     * </ul>
+     * </p>
+     * 
+     * <p>
+     * En caso de degradación, se invoca el callback {@code onRebindCallback.run()}
+     * proporcionado externamente (por ejemplo, para reiniciar la sesión SMPP).
+     * Luego, se limpia el historial para evitar reacciones repetidas ante el mismo evento.
+     * </p>
+     * 
+     * @param window Instancia actual de la ventana de envío SMPP
+     */
+    private void evaluateDegradation(Window<Integer, ?, ?> window) {
+        boolean saturated = liberatedSlots.get() >= window.getMaxSize() * SATURATION_THRESHOLD;
+
+        // Actualizar historial circular
+        boolean wasPreviouslyCritical = criticalHistory[historyIndex];
+        if (saturated && !wasPreviouslyCritical) totalCritical++;
+        if (!saturated && wasPreviouslyCritical) totalCritical--;
+        criticalHistory[historyIndex] = saturated;
+
+        historyIndex = (historyIndex + 1) % HISTORY_MAX;
+
+        logger.debug("[WINDOW MONITOR] Historial crítico actualizado: {} ocurrencias en últimas {} inspecciones",
+                totalCritical, HISTORY_MAX);
+
+        // Decisión de rebind
+        if (totalCritical >= MIN_CRITICAL_OCCURRENCES && onRebindCallback != null) {
+            logger.warn("[WINDOW MONITOR] Se cumplen condiciones de degradación persistente, ejecutando rebind...");
+            onRebindCallback.run();
+
+            // Limpiar historial tras rebind
+            for (int i = 0; i < HISTORY_MAX; i++) criticalHistory[i] = false;
+            totalCritical = 0;
+            historyIndex = 0;
+        }
+    }
+
 }

@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
+import java.util.function.Supplier;
 
 import org.apache.logging.log4j.ThreadContext;
 
@@ -46,7 +47,7 @@ public class SmsSender {
     private static final Duration DEFAULT_DELAY_MS = Duration.ofMillis(500);
     private static final Duration TIMEOUT_3_SEGUNDOS = Duration.ofSeconds(3);
 
-    private final SmppSession session;
+    private final Supplier<SmppSession> sessionProvider;
     private final DBService dbservice;
 
     private final SmppLatencyStats latencyStats;
@@ -60,11 +61,12 @@ public class SmsSender {
     /**
      * Constructor.
      * 
-     * @param session Sesión SMPP activa para envío de mensajes.
+     * @param sessionProvider Proveedor de sesión SMPP activa para envío de mensajes.
      * @param dbservice Servicio para actualización de estados en base de datos.
+     * @param latencyStats Objeto de estadísticas de latencia
      */
-    public SmsSender(SmppSession session, DBService dbservice, SmppLatencyStats latencyStats) {
-        this.session = session;
+    public SmsSender(Supplier<SmppSession> sessionProvider, DBService dbservice, SmppLatencyStats latencyStats) {
+        this.sessionProvider = sessionProvider;
         this.dbservice = dbservice;
         this.latencyStats = latencyStats;
     }
@@ -236,6 +238,13 @@ public class SmsSender {
 
             logger.info(String.format("Enviar mensaje a [%s] con texto=[%s]", msg.getDestination(), msg.getText()));
             //dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.EN_PROCESO_ENVIO, null, null, null);
+
+            SmppSession session = sessionProvider.get();
+            if (session == null || !session.isBound()) {
+                logger.warn("Sesión SMPP no disponible o no está en estado BOUND. No se puede enviar el mensaje.");
+                dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, 999998, "Sesión no disponible", null);
+                return;
+            }
 
             // Medición de latencia de envío
             long inicio = System.currentTimeMillis();
