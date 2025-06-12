@@ -45,6 +45,7 @@ public class SmppSessionManager {
 
     private static final Logger logger = LogManager.getLogger(SmppSessionManager.class);
 
+    private static final Duration ESPERA_2_SEGUNDOS = Duration.ofSeconds(2);
     private static final Duration INICIO_15_SEGUNDOS = Duration.ofSeconds(15);
     private static final Duration TIMEOUT_30_SEGUNDOS = Duration.ofSeconds(30);
 
@@ -60,10 +61,9 @@ public class SmppSessionManager {
     private SmppLatencyStats latencyStats;
 
     /**
-     * Constructor que inicializa el cliente SMPP.
+     * Constructor por defecto
      */
     public SmppSessionManager() {
-        this.defaultClient = new DefaultSmppClient();
     }
 
     public SmppSession getSession() {
@@ -89,7 +89,7 @@ public class SmppSessionManager {
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession bind(
+    public synchronized SmppSession bind(
             String service, DBService dbService, String host, int port, String systemId, String password, Integer windowSize, SmppLatencyStats latencyStats) throws Exception {
         SmppSessionConfiguration config = new SmppSessionConfiguration();
         config.setName(String.format("SMPP-RiskSession-%s", systemId));
@@ -107,6 +107,9 @@ public class SmppSessionManager {
         //config.setConnectTimeout(5000);             // Tiempo para conectar
         //config.setBindTimeout(5000);                // Tiempo para esperar el bind
         //config.setWriteTimeout(2000);               // Tiempo para escribir en socket
+
+        // Inicializar el cliente SMPP
+        this.defaultClient = new DefaultSmppClient();
 
         session = defaultClient.bind(config, new SmppMessageHandler(service, dbService));
 
@@ -140,7 +143,7 @@ public class SmppSessionManager {
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession bind(String service, DBService dbService, SmsConfig smsConfig, SmppLatencyStats latencyStats) throws Exception {
+    public synchronized SmppSession bind(String service, DBService dbService, SmsConfig smsConfig, SmppLatencyStats latencyStats) throws Exception {
         this.serviceName = service;
         this.dbService = dbService;
         this.smsConfig = smsConfig;
@@ -163,13 +166,29 @@ public class SmppSessionManager {
      * Deshace el bind de la sesión y destruye el cliente SMPP para liberar recursos.
      * </p>
      */
-    public void shutdown() {
-        if (scheduler != null && !scheduler.isShutdown()) {
-            scheduler.shutdownNow();
+    public synchronized void shutdown() {
+        try {
+            if (scheduler != null && !scheduler.isShutdown()) scheduler.shutdownNow();
+        } catch (Exception e) {
+            logger.warn("Error al apagar scheduler: {}", e.getMessage());
         }
 
-        if (session != null && session.isBound()) session.unbind(5000);
-        if (defaultClient != null) defaultClient.destroy();
+        try {
+            if (session != null && session.isBound()) session.unbind(5000);
+        } catch (Exception e) {
+            logger.warn("Error al hacer unbind de la sesión: {}", e.getMessage());
+        }
+
+        try {
+            if (defaultClient != null) defaultClient.destroy();
+        } catch (Exception e) {
+            logger.warn("Error al destruir DefaultSmppClient: {}", e.getMessage());
+        }
+
+        // Limpiar referencias para evitar reutilización incorrecta en reintentos
+        session = null;
+        defaultClient = null;
+        scheduler = null;
     }
 
     /**
@@ -202,17 +221,45 @@ public class SmppSessionManager {
      */
     public synchronized void rebind() {
         logger.warn("[AUTO-REBIND] Reiniciando sesión SMPP para servicio [{}]...", serviceName);
-        try {
-            this.shutdown();
-            Thread.sleep(INICIO_15_SEGUNDOS.toMillis()); // delay opcional
+        final int MAX_REINTENTOS = 5;
+        int intento = 0;
+        boolean exito = false;
 
-            // recrear DefaultSmppClient luego del shutdown
-            this.defaultClient = new DefaultSmppClient();
+        while (intento < MAX_REINTENTOS && !exito) {
+            intento++;
+            try {
+                this.shutdown();
 
-            this.bind(serviceName, dbService, smsConfig, latencyStats);
-            logger.info("[AUTO-REBIND] Rebind SMPP exitoso para [{}]", serviceName);
-        } catch (Exception ex) {
-            logger.error("[AUTO-REBIND] Error al rebindear SMPP: {}", ex.getMessage(), ex);
+                try {
+                    Thread.sleep(INICIO_15_SEGUNDOS.toMillis());
+                } catch (InterruptedException ie) {
+                    logger.warn("[AUTO-REBIND] Sleep interrumpido en intento #{}: {}", intento, ie.getMessage());
+                    Thread.currentThread().interrupt(); // mantener el estado de interrupción
+                    if (intento < MAX_REINTENTOS)
+                        return; // abortar rebind si fue interrumpido desde fuera (solo si no es el último intento)
+                    else
+                        logger.warn("[AUTO-REBIND] Continuando con el último intento a pesar de la interrupción...");
+                }
+
+                this.bind(serviceName, dbService, smsConfig, latencyStats);
+                logger.info("[AUTO-REBIND] Rebind SMPP exitoso para [{}] en intento #{}", serviceName, intento);
+                exito = true;
+            } catch (Exception ex) {
+                logger.error("[AUTO-REBIND] Fallo intento #{} para [{}]: {}", intento, serviceName, ex.getMessage(), ex);
+                if (intento < MAX_REINTENTOS) {
+                    try {
+                        Thread.sleep(ESPERA_2_SEGUNDOS.toMillis()); // espera breve antes de intentar de nuevo
+                    } catch (InterruptedException ie) {
+                        logger.warn("[AUTO-REBIND] Sleep interrumpido durante espera entre reintentos: {}", ie.getMessage());
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+            }
+        }
+
+        if (!exito) {
+            logger.error("[AUTO-REBIND] Rebind fallido tras {} intentos para [{}].", MAX_REINTENTOS, serviceName);
         }
     }
 
