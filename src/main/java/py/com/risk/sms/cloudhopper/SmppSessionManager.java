@@ -54,11 +54,20 @@ public class SmppSessionManager {
     private ScheduledExecutorService scheduler;
     private SmppWindowMonitor windowMonitor;
 
+    private String serviceName;
+    private DBService dbService;
+    private SmsConfig smsConfig;
+    private SmppLatencyStats latencyStats;
+
     /**
      * Constructor que inicializa el cliente SMPP.
      */
     public SmppSessionManager() {
         this.defaultClient = new DefaultSmppClient();
+    }
+
+    public SmppSession getSession() {
+        return session;
     }
 
     /**
@@ -80,7 +89,7 @@ public class SmppSessionManager {
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(
+    public SmppSession bind(
             String service, DBService dbService, String host, int port, String systemId, String password, Integer windowSize, SmppLatencyStats latencyStats) throws Exception {
         SmppSessionConfiguration config = new SmppSessionConfiguration();
         config.setName(String.format("SMPP-RiskSession-%s", systemId));
@@ -101,7 +110,7 @@ public class SmppSessionManager {
 
         session = defaultClient.bind(config, new SmppMessageHandler(service, dbService));
 
-        this.windowMonitor = new SmppWindowMonitor(TIMEOUT_30_SEGUNDOS.toMillis(), latencyStats); // 30s de umbral
+        this.windowMonitor = new SmppWindowMonitor(TIMEOUT_30_SEGUNDOS.toMillis(), latencyStats, this::rebind); // 30s de umbral
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
 
         scheduler.scheduleAtFixedRate(() -> {
@@ -131,9 +140,14 @@ public class SmppSessionManager {
      * @return La sesión SMPP establecida.
      * @throws Exception Si la conexión o el bind falla.
      */
-    public SmppSession connect(String service, DBService dbService, SmsConfig smsConfig, SmppLatencyStats latencyStats) throws Exception {
+    public SmppSession bind(String service, DBService dbService, SmsConfig smsConfig, SmppLatencyStats latencyStats) throws Exception {
+        this.serviceName = service;
+        this.dbService = dbService;
+        this.smsConfig = smsConfig;
+        this.latencyStats = latencyStats;
+
         SmppConfig smppConfig = smsConfig.getSmpp();
-        return this.connect(service,
+        return this.bind(service,
                 dbService,
                 smppConfig.getHost(),
                 smppConfig.getPort(),
@@ -154,7 +168,52 @@ public class SmppSessionManager {
             scheduler.shutdownNow();
         }
 
-        if (session != null) session.unbind(5000);
+        if (session != null && session.isBound()) session.unbind(5000);
         if (defaultClient != null) defaultClient.destroy();
     }
+
+    /**
+     * Reinicia la sesión SMPP de forma segura y controlada.
+     * 
+     * <p>
+     * Este método encapsula la lógica de desconexión y reconexión (bind) de la sesión SMPP.
+     * Es útil en escenarios donde se detecta una degradación en la comunicación con el proveedor
+     * (por ejemplo, saturación de la ventana de envío o timeouts repetidos).
+     * </p>
+     * 
+     * <p>
+     * Internamente realiza los siguientes pasos:
+     * <ul>
+     *   <li>Invoca {@link #shutdown()} para liberar recursos, cerrar sesión y detener el monitor.</li>
+     *   <li>Espera un breve período (15 segundos) para permitir que el proveedor se estabilice.</li>
+     *   <li>Invoca {@link #connect(String, DBService, SmsConfig, SmppLatencyStats)} reutilizando los parámetros almacenados previamente.</li>
+     * </ul>
+     * </p>
+     * 
+     * <p>
+     * El método está sincronizado para evitar que múltiples hilos realicen rebinds simultáneamente,
+     * lo cual podría producir condiciones de carrera o sesiones inconsistentes.
+     * </p>
+     * 
+     * <p>
+     * Si la reconexión falla, se registra un log de error pero no se lanza excepción, permitiendo
+     * que el sistema continúe y el monitor vuelva a intentar más adelante si corresponde.
+     * </p>
+     */
+    public synchronized void rebind() {
+        logger.warn("[AUTO-REBIND] Reiniciando sesión SMPP para servicio [{}]...", serviceName);
+        try {
+            this.shutdown();
+            Thread.sleep(INICIO_15_SEGUNDOS.toMillis()); // delay opcional
+
+            // recrear DefaultSmppClient luego del shutdown
+            this.defaultClient = new DefaultSmppClient();
+
+            this.bind(serviceName, dbService, smsConfig, latencyStats);
+            logger.info("[AUTO-REBIND] Rebind SMPP exitoso para [{}]", serviceName);
+        } catch (Exception ex) {
+            logger.error("[AUTO-REBIND] Error al rebindear SMPP: {}", ex.getMessage(), ex);
+        }
+    }
+
 }
