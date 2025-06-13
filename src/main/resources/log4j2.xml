@@ -69,8 +69,8 @@
             <!-- Route dinámico por servicio -->
             <Route>
                 <RollingFile name="SmppLatencyLog"
-                            fileName="logs/risk-smpp-latency-${ctx:servicio}.log"
-                            filePattern="logs/risk-smpp-latency-${ctx:servicio}-%d{yyyy-MM-dd}-%i.log.gz">
+                            fileName="logs/risk-smpp-monitor-${ctx:servicio}.log"
+                            filePattern="logs/risk-smpp-monitor-${ctx:servicio}-%d{yyyy-MM-dd}-%i.log.gz">
                     <PatternLayout>
                         <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %X{servicio} - %msg%n</Pattern>
                     </PatternLayout>
@@ -80,7 +80,7 @@
                     </Policies>
                     <DefaultRolloverStrategy max="7">
                         <Delete basePath="logs" maxDepth="1">
-                            <IfFileName glob="risk-smpp-latency-*.log.gz"/>
+                            <IfFileName glob="risk-smpp-monitor-*.log.gz"/>
                             <IfLastModified age="3d"/>
                         </Delete>
                     </DefaultRolloverStrategy>
@@ -124,14 +124,21 @@
     </Logger>
 
     <!-- Log específico para SmppLatencyStats -->
-    <Logger name="py.com.risk.sms.util.SmppLatencyStats" level="info" additivity="false">
+    <Logger name="py.com.risk.sms.util.SmppLatencyStats" level="debug" additivity="false">
         <AppenderRef ref="Console"/>
         <AppenderRef ref="AsyncRouting"/>
         <AppenderRef ref="AsyncSmppLatencyRouting"/>
     </Logger>
 
     <!-- Log específico para SmppWindowMonitor -->
-    <Logger name="py.com.risk.sms.util.SmppWindowMonitor" level="info" additivity="false">
+    <Logger name="py.com.risk.sms.util.SmppWindowMonitor" level="debug" additivity="false">
+        <AppenderRef ref="Console"/>
+        <AppenderRef ref="AsyncFile"/>
+        <AppenderRef ref="AsyncSmppLatencyRouting"/>
+    </Logger>
+
+    <!-- Log específico para SmppSessionManager -->
+    <Logger name="py.com.risk.sms.cloudhopper.SmppSessionManager" level="debug" additivity="false">
         <AppenderRef ref="Console"/>
         <AppenderRef ref="AsyncFile"/>
         <AppenderRef ref="AsyncSmppLatencyRouting"/>
