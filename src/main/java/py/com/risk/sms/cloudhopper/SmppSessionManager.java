@@ -220,6 +220,7 @@ public class SmppSessionManager {
      * </p>
      */
     public synchronized void rebind() {
+        ThreadContext.put("servicio", this.serviceName);
         logger.warn("[AUTO-REBIND] Reiniciando sesión SMPP para servicio [{}]...", serviceName);
         final int MAX_REINTENTOS = 5;
         int intento = 0;
@@ -236,7 +237,7 @@ public class SmppSessionManager {
                     logger.warn("[AUTO-REBIND] Sleep interrumpido en intento #{}: {}", intento, ie.getMessage());
                     Thread.currentThread().interrupt(); // mantener el estado de interrupción
                     if (intento < MAX_REINTENTOS)
-                        return; // abortar rebind si fue interrumpido desde fuera (solo si no es el último intento)
+                        continue; // salta al siguiente intento de rebind si fue interrumpido desde fuera (solo si no es el último intento)
                     else
                         logger.warn("[AUTO-REBIND] Continuando con el último intento a pesar de la interrupción...");
                 }
