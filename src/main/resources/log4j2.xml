@@ -124,21 +124,21 @@
     </Logger>
 
     <!-- Log específico para SmppLatencyStats -->
-    <Logger name="py.com.risk.sms.util.SmppLatencyStats" level="debug" additivity="false">
+    <Logger name="py.com.risk.sms.util.SmppLatencyStats" level="info" additivity="false">
         <AppenderRef ref="Console"/>
         <AppenderRef ref="AsyncRouting"/>
         <AppenderRef ref="AsyncSmppLatencyRouting"/>
     </Logger>
 
     <!-- Log específico para SmppWindowMonitor -->
-    <Logger name="py.com.risk.sms.util.SmppWindowMonitor" level="debug" additivity="false">
+    <Logger name="py.com.risk.sms.util.SmppWindowMonitor" level="info" additivity="false">
         <AppenderRef ref="Console"/>
         <AppenderRef ref="AsyncFile"/>
         <AppenderRef ref="AsyncSmppLatencyRouting"/>
     </Logger>
 
     <!-- Log específico para SmppSessionManager -->
-    <Logger name="py.com.risk.sms.cloudhopper.SmppSessionManager" level="debug" additivity="false">
+    <Logger name="py.com.risk.sms.cloudhopper.SmppSessionManager" level="info" additivity="false">
         <AppenderRef ref="Console"/>
         <AppenderRef ref="AsyncFile"/>
         <AppenderRef ref="AsyncSmppLatencyRouting"/>
