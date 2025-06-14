@@ -187,7 +187,7 @@ public class SmppWindowMonitor {
         // Decisión de rebind
         if (totalCritical >= MIN_CRITICAL_OCCURRENCES && onRebindCallback != null) {
             logger.warn("[WINDOW MONITOR] Se cumplen condiciones de degradación persistente, ejecutando rebind...");
-            onRebindCallback.run();
+            new Thread(this.onRebindCallback).start(); // ejecuta rebind() fuera del scheduler
 
             // Limpiar historial tras rebind
             for (int i = 0; i < HISTORY_MAX; i++) criticalHistory[i] = false;
