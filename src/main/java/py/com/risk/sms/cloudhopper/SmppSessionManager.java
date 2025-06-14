@@ -165,10 +165,15 @@ public class SmppSessionManager {
      * <p>
      * Deshace el bind de la sesión y destruye el cliente SMPP para liberar recursos.
      * </p>
+     * 
+     * @param force Necesita un cierre forzado cuando el programa termina, caso contrario hace un cierre controlado.
      */
-    public synchronized void shutdown() {
+    public synchronized void shutdown(boolean force) {
         try {
-            if (scheduler != null && !scheduler.isShutdown()) scheduler.shutdownNow();
+            if (scheduler != null && !scheduler.isShutdown()) {
+                if (force) scheduler.shutdownNow();
+                else scheduler.shutdown();
+            }
         } catch (Exception e) {
             logger.warn("Error al apagar scheduler: {}", e.getMessage());
         }
@@ -189,6 +194,16 @@ public class SmppSessionManager {
         session = null;
         defaultClient = null;
         scheduler = null;
+    }
+
+    /**
+     * Desconecta y limpia recursos asociados a la sesión SMPP.
+     * <p>
+     * Deshace el bind de la sesión y destruye el cliente SMPP para liberar recursos.
+     * </p>
+     */
+    public synchronized void shutdown() {
+        this.shutdown(true);
     }
 
     /**
@@ -229,7 +244,7 @@ public class SmppSessionManager {
         while (intento < MAX_REINTENTOS && !exito) {
             intento++;
             try {
-                this.shutdown();
+                this.shutdown(false);
 
                 try {
                     Thread.sleep(INICIO_15_SEGUNDOS.toMillis());
