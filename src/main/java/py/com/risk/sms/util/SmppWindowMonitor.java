@@ -95,8 +95,15 @@ public class SmppWindowMonitor {
      */
     public void inspectAndClean(SmppSession session) {
         if (session == null || session.getSendWindow() == null) {
-            logger.warn("Sesión o ventana nula. No se puede inspeccionar.");
+            logger.warn("[SESSION MONITOR] Sesión o ventana nula. No se puede inspeccionar.");
             return;
+        }
+
+        // Verificación directa del estado de la sesión
+        if (!session.isBound()) {
+            logger.warn("[SESSION MONITOR] Sesión SMPP no está en estado BOUND. Ejecutando rebind...");
+            this.runRebind();
+            return; // salir para evitar evaluación redundante de la ventana
         }
 
         Window<Integer, ?, ?> window = session.getSendWindow();
@@ -187,13 +194,47 @@ public class SmppWindowMonitor {
         // Decisión de rebind
         if (totalCritical >= MIN_CRITICAL_OCCURRENCES && onRebindCallback != null) {
             logger.warn("[WINDOW MONITOR] Se cumplen condiciones de degradación persistente, ejecutando rebind...");
-            new Thread(this.onRebindCallback).start(); // ejecuta rebind() fuera del scheduler
+            this.runRebind();
 
             // Limpiar historial tras rebind
             for (int i = 0; i < HISTORY_MAX; i++) criticalHistory[i] = false;
             totalCritical = 0;
             historyIndex = 0;
         }
+    }
+
+    /**
+     * Ejecuta asincrónicamente el callback de rebind proporcionado,
+     * aislando su ejecución del hilo principal del scheduler.
+     *
+     * <p>
+     * Este método crea un nuevo hilo dedicado para realizar la operación
+     * de rebind, lo cual es fundamental para evitar interferencias o bloqueos
+     * dentro del hilo del {@link java.util.concurrent.ScheduledExecutorService}
+     * que invoca periódicamente el monitor de la sesión SMPP.
+     * </p>
+     *
+     * <p>
+     * La operación de rebind puede implicar:
+     * <ul>
+     *   <li>Cierre de la sesión SMPP activa</li>
+     *   <li>Esperas bloqueantes (e.g., {@code Thread.sleep})</li>
+     *   <li>Intentos múltiples de reconexión en caso de fallo</li>
+     * </ul>
+     * Estas acciones pueden demorar o interrumpirse si se ejecutan dentro del
+     * scheduler, por lo que se encapsulan en un hilo independiente y nombrado,
+     * con el prefijo {@code SMPP-Rebind-Thread-<timestamp>} para facilitar su trazabilidad.
+     * </p>
+     */
+    private void runRebind() {
+        Thread t = new Thread(() -> { // ejecuta rebind() fuera del scheduler
+            try {
+                this.onRebindCallback.run();
+            } catch (Exception ex) {
+                logger.error("Error en rebind desde monitor SMPP", ex);
+            }
+        }, "SMPP-Rebind-Thread-" + System.currentTimeMillis());
+        t.start();
     }
 
 }

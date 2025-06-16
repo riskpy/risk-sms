@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -60,6 +61,8 @@ public class SmppSessionManager {
     private SmsConfig smsConfig;
     private SmppLatencyStats latencyStats;
 
+    private final AtomicBoolean rebindInProgress = new AtomicBoolean(false);
+
     /**
      * Constructor por defecto
      */
@@ -113,7 +116,7 @@ public class SmppSessionManager {
 
         session = defaultClient.bind(config, new SmppMessageHandler(service, dbService));
 
-        this.windowMonitor = new SmppWindowMonitor(TIMEOUT_30_SEGUNDOS.toMillis(), latencyStats, this::rebind); // 30s de umbral
+        this.windowMonitor = new SmppWindowMonitor(TIMEOUT_30_SEGUNDOS.toMillis(), latencyStats, this::rebindSafely); // 30s de umbral
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
 
         scheduler.scheduleAtFixedRate(() -> {
@@ -276,6 +279,28 @@ public class SmppSessionManager {
 
         if (!exito) {
             logger.error("[AUTO-REBIND] Rebind fallido tras {} intentos para [{}].", MAX_REINTENTOS, serviceName);
+        }
+    }
+
+    /**
+     * Ejecuta de forma segura el proceso de rebind evitando invocaciones concurrentes.
+     *
+     * <p>
+     * Este método actúa como una envoltura segura alrededor del método {@link #rebind()},
+     * asegurando que no se ejecuten múltiples procesos de rebind al mismo tiempo.
+     * Utiliza un {@link java.util.concurrent.atomic.AtomicBoolean} como bandera
+     * de control para garantizar exclusividad sin necesidad de sincronización explícita.
+     * </p>
+     */
+    public void rebindSafely() {
+        if (rebindInProgress.getAndSet(true)) {
+            logger.warn("[AUTO-REBIND] Ya hay un rebind en ejecución. Abortando invocación redundante.");
+            return;
+        }
+        try {
+            this.rebind(); // método synchronized
+        } finally {
+            rebindInProgress.set(false);
         }
     }
 
