@@ -105,8 +105,8 @@ public class SmppSessionManager {
         config.getLoggingOptions().setLogBytes(true);
 
         config.setWindowSize(windowSize);
-        //config.setRequestExpiryTimeout(10000);      // Tiempo que espera antes de considerar que el proveedor no respondió
-        //config.setWindowMonitorInterval(15000);     // Intervalo para revisar expiraciones
+        config.setRequestExpiryTimeout(30000); // Tiempo que espera antes de considerar que el proveedor no respondió. Por defecto: 60000 ms
+        //config.setWindowMonitorInterval(15000);     // Intervalo para revisar expiraciones. Por defecto: 5000 ms
         //config.setConnectTimeout(5000);             // Tiempo para conectar
         //config.setBindTimeout(5000);                // Tiempo para esperar el bind
         //config.setWriteTimeout(2000);               // Tiempo para escribir en socket
@@ -123,8 +123,14 @@ public class SmppSessionManager {
             ThreadContext.put("servicio", service);
             try {
                 windowMonitor.inspectAndClean(session);
+
+                // Enviar enquire_link manual si la sesión está activa
+                if (session != null && session.isBound()) {
+                    session.enquireLink(new com.cloudhopper.smpp.pdu.EnquireLink(), 5000);
+                    logger.debug("[KEEP-ALIVE] Enviado enquire_link manual a proveedor SMPP [{}]", service);
+                }
             } catch (Exception e) {
-                logger.warn("Error en inspección de ventana SMPP", e);
+                logger.warn("Error en inspección de ventana o keep-alive de sesión SMPP", e);
             }
         }, INICIO_15_SEGUNDOS.getSeconds(), TIMEOUT_30_SEGUNDOS.getSeconds(), TimeUnit.SECONDS);
 
