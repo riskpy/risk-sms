@@ -24,6 +24,7 @@ import com.cloudhopper.smpp.SmppSession;
 import com.cloudhopper.smpp.pdu.SubmitSm;
 import com.cloudhopper.smpp.pdu.SubmitSmResp;
 import com.cloudhopper.smpp.type.Address;
+import com.cloudhopper.smpp.type.SmppInvalidArgumentException;
 
 import py.com.risk.sms.bd.DBService;
 import py.com.risk.sms.log.SafeLogManager;
@@ -238,13 +239,16 @@ public class SmsSender {
 
         try {
             String texto = msg.getText();
-            int maxLenPerSegment = 153;
-            int totalParts = (int) Math.ceil((double) texto.length() / maxLenPerSegment);
+            byte[] bytesGsm = texto.getBytes(StandardCharsets.ISO_8859_1); // simulación GSM-7
 
-            if (totalParts <= 1) {
-                // Solo un segmento
-                sendSegment(msg, texto, (byte) 0, (byte) 1, (byte) 1);
+            if (bytesGsm.length <= 160) {
+                // Enviar en un solo segmento sin UDH
+                sendUnfragmented(msg, texto);
             } else {
+                // Fragmentar usando UDH (153 chars por segmento)
+                int maxLenPerSegment = 153;
+                int totalParts = (int) Math.ceil((double) texto.length() / maxLenPerSegment);
+
                 byte refNum = (byte) (System.currentTimeMillis() & 0xFF); // referencia aleatoria
                 for (int i = 0; i < totalParts; i++) {
                     int start = i * maxLenPerSegment;
@@ -288,35 +292,83 @@ public class SmsSender {
      * @throws Exception   Si ocurre un error durante el envío SMPP.
      */
     private void sendSegment(SmsMessage msg, String parteTexto, byte refNum, byte totalParts, byte partNum) throws Exception {
-        SubmitSm submit = new SubmitSm();
-        submit.setSourceAddress(new Address((byte) 0x01, (byte) 0x01, msg.getSource()));
-        submit.setDestAddress(new Address((byte) 0x01, (byte) 0x01, msg.getDestination()));
-
-        byte[] udh = {
-            0x05, 0x00, 0x03, refNum, totalParts, partNum
-        };
-
-        byte[] mensajeBytes = parteTexto.getBytes(StandardCharsets.ISO_8859_1);
+        byte[] udh = { 0x05, 0x00, 0x03, refNum, totalParts, partNum };
+        byte[] mensajeBytes = parteTexto.getBytes(StandardCharsets.ISO_8859_1); // GSM-7
         byte[] shortMessage = new byte[udh.length + mensajeBytes.length];
         System.arraycopy(udh, 0, shortMessage, 0, udh.length);
         System.arraycopy(mensajeBytes, 0, shortMessage, udh.length, mensajeBytes.length);
 
+        SubmitSm submit = buildSubmitSm(msg, shortMessage, (byte) 0x00, (byte) 0x40); // GSM-7 + UDH
+
+        logger.info(String.format("Enviar mensaje %d/%d a [%s]: [%s]", partNum, totalParts, msg.getDestination(), parteTexto));
+
+        sendAndHandleResponse(submit, msg, partNum == 1, partNum == totalParts);
+    }
+
+    /**
+     * Envía un mensaje SMS de texto simple (no fragmentado) utilizando el protocolo SMPP.
+     * 
+     * <p>Este método está optimizado para mensajes cuya longitud en codificación GSM-7
+     * no supera los 160 caracteres, evitando así el uso de concatenación (UDH).</p>
+     *
+     * <p>Se codifica el texto usando ISO-8859-1 (representando GSM-7), se establece el
+     * data coding a 0x00, y se omite el encabezado UDH.</p>
+     * 
+     * @param msg    Objeto {@link SmsMessage} con los datos del mensaje a enviar.
+     * @param texto  Contenido del mensaje a enviar.
+     * @throws Exception Si ocurre un error durante el envío del mensaje.
+     */
+    private void sendUnfragmented(SmsMessage msg, String texto) throws Exception {
+        byte[] mensajeBytes = texto.getBytes(StandardCharsets.ISO_8859_1); // GSM-7
+        SubmitSm submit = buildSubmitSm(msg, mensajeBytes, (byte) 0x00, (byte) 0x00); // GSM-7 sin UDH
+
+        logger.info(String.format("Enviar mensaje simple a [%s]: [%s]", msg.getDestination(), texto));
+
+        sendAndHandleResponse(submit, msg, true, true);
+    }
+
+    /**
+     * Construye un objeto {@link SubmitSm} listo para ser enviado por SMPP.
+     *
+     * <p>Este método encapsula la lógica de construcción del PDU, incluyendo la asignación
+     * de dirección de origen y destino, el mensaje en bytes, el esquema de codificación y
+     * el valor de {@code esm_class}.</p>
+     *
+     * @param msg          Objeto {@link SmsMessage} con los datos del mensaje.
+     * @param shortMessage Contenido del mensaje (puede incluir UDH) codificado en bytes.
+     * @param dataCoding   Valor del campo {@code data_coding} SMPP (por ejemplo, 0x00 para GSM-7).
+     * @param esmClass     Valor del campo {@code esm_class} SMPP (por ejemplo, 0x40 si hay UDH).
+     * @return Objeto {@link SubmitSm} completamente preparado para ser enviado.
+     * @throws SmppInvalidArgumentException Si alguno de los parámetros es inválido para la construcción del PDU.
+     */
+    private SubmitSm buildSubmitSm(SmsMessage msg, byte[] shortMessage, byte dataCoding, byte esmClass) throws SmppInvalidArgumentException {
+        SubmitSm submit = new SubmitSm();
+        submit.setSourceAddress(new Address((byte) 0x01, (byte) 0x01, msg.getSource()));
+        submit.setDestAddress(new Address((byte) 0x01, (byte) 0x01, msg.getDestination()));
         submit.setShortMessage(shortMessage);
-        submit.setDataCoding((byte) 0x00); // GSM-7
-        submit.setEsmClass((byte) 0x40);   // UDH presente
+        submit.setDataCoding(dataCoding);
+        submit.setEsmClass(esmClass);
+        return submit;
+    }
 
-        if (totalParts == 1 && partNum == 1) {
-            logger.info(String.format("Enviar mensaje a [%s]: [%s]", msg.getDestination(), parteTexto));
-        } else {
-            logger.info(String.format("Enviar mensaje %d/%d a [%s]: [%s]", partNum, totalParts, msg.getDestination(), parteTexto));
-        }
-
+    /**
+     * Envía un mensaje SMPP mediante una sesión activa y maneja la respuesta.
+     * 
+     * <p>Este método mide la latencia del envío, registra el resultado, y actualiza
+     * el estado del mensaje en base de datos si así se indica por los flags.</p>
+     * 
+     * @param submit                  Objeto {@link SubmitSm} a enviar.
+     * @param msg                     Objeto {@link SmsMessage} relacionado con el envío.
+     * @param shouldUpdateOnError     Indica si debe actualizar el estado en caso de error.
+     * @param shouldUpdateOnSuccess   Indica si debe actualizar el estado en caso de éxito.
+     * @throws Exception Si ocurre un error durante el envío o la actualización en base de datos.
+     */
+    private void sendAndHandleResponse(SubmitSm submit, SmsMessage msg, boolean shouldUpdateOnError, boolean shouldUpdateOnSuccess) throws Exception {
         SmppSession session = sessionProvider.get();
         if (session == null || !session.isBound()) {
             logger.warn("Sesión SMPP no disponible. No se puede enviar el mensaje.");
-            if (partNum == 1) {
+            if (shouldUpdateOnError)
                 dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, 999998, "Sesión no disponible", null);
-            }
             return;
         }
 
@@ -327,11 +379,10 @@ public class SmsSender {
         latencyStats.record(duracionMs); // Acumula la estadística
 
         if (resp.getCommandStatus() == SmppConstants.STATUS_OK) {
-            if (partNum == totalParts)
+            if (shouldUpdateOnSuccess)
                 dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.ENVIADO, resp.getCommandStatus(), resp.getResultMessage(), resp.getMessageId());
         } else {
-            if (partNum == 1) {
-                // Dependiendo del tipo de error, se marca como reintento, dejando en estado "Pendiente de Envío"
+            if (shouldUpdateOnError) {
                 if (CODIGOS_REINTENTOS.contains(resp.getCommandStatus()))
                     dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, resp.getCommandStatus(), resp.getResultMessage(), null);
                 else
