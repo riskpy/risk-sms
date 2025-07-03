@@ -8,7 +8,13 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import org.apache.logging.log4j.ThreadContext;
@@ -228,52 +234,109 @@ public class SmsSender {
      */
     private void sendSingleMessage(SmsMessage msg, String count) {
         ThreadContext.put("contador", count);
-    	ThreadContext.put("idMensaje", String.valueOf(msg.getIdMensaje()));
+        ThreadContext.put("idMensaje", String.valueOf(msg.getIdMensaje()));
 
         try {
-            SubmitSm submit = new SubmitSm();
-            submit.setSourceAddress(new Address((byte) 0x01, (byte) 0x01, msg.getSource()));
-            submit.setDestAddress(new Address((byte) 0x01, (byte) 0x01, msg.getDestination()));
-            submit.setShortMessage(msg.getText().getBytes(StandardCharsets.UTF_8));
+            String texto = msg.getText();
+            int maxLenPerSegment = 153;
+            int totalParts = (int) Math.ceil((double) texto.length() / maxLenPerSegment);
 
-            logger.info(String.format("Enviar mensaje a [%s] con texto=[%s]", msg.getDestination(), msg.getText()));
-            //dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.EN_PROCESO_ENVIO, null, null, null);
-
-            SmppSession session = sessionProvider.get();
-            if (session == null || !session.isBound()) {
-                logger.warn("Sesión SMPP no disponible o no está en estado BOUND. No se puede enviar el mensaje.");
-                dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, 999998, "Sesión no disponible", null);
-                return;
+            if (totalParts <= 1) {
+                // Solo un segmento
+                sendSegment(msg, texto, (byte) 0, (byte) 1, (byte) 1);
+            } else {
+                byte refNum = (byte) (System.currentTimeMillis() & 0xFF); // referencia aleatoria
+                for (int i = 0; i < totalParts; i++) {
+                    int start = i * maxLenPerSegment;
+                    int end = Math.min((i + 1) * maxLenPerSegment, texto.length());
+                    String segmento = texto.substring(start, end);
+                    sendSegment(msg, segmento, refNum, (byte) totalParts, (byte) (i + 1));
+                }
             }
 
-            // Medición de latencia de envío
-            long inicio = System.currentTimeMillis();
+        } catch (Exception e) {
+            logger.error(String.format("Error al enviar mensaje: [%s]", e.getMessage()), e);
+            dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, 999999, "Excepción: " + e.getMessage(), null);
+        } finally {
+            ThreadContext.remove("idMensaje");
+            ThreadContext.remove("contador");
+        }
+    }
 
-            SubmitSmResp resp = session.submit(submit, TIMEOUT_3_SEGUNDOS.toMillis());
+    /**
+     * Envía un segmento individual de un mensaje SMS concatenado utilizando
+     * codificación GSM-7 (data coding 0x00) y encabezado UDH (User Data Header).
+     * 
+     * <p>Este método construye un {@code SubmitSm} con los parámetros necesarios
+     * para indicar que el mensaje es parte de una secuencia concatenada, incluyendo:
+     * <ul>
+     *   <li>Referencia única {@code refNum} para identificar el conjunto del mensaje.</li>
+     *   <li>Total de partes {@code totalParts} que componen el mensaje completo.</li>
+     *   <li>Número de secuencia {@code partNum} de este segmento específico.</li>
+     * </ul>
+     * </p>
+     *
+     * <p>El contenido se codifica como GSM 7-bit (ISO-8859-1) y se agrega al payload
+     * luego del UDH. Se establece el {@code esm_class} como 0x40 para indicar
+     * la presencia de UDH.</p>
+     * 
+     * @param msg          Objeto original del mensaje SMS, utilizado para ID y dirección.
+     * @param parteTexto   Texto correspondiente a este segmento individual.
+     * @param refNum       Número de referencia común para todos los segmentos del mensaje.
+     * @param totalParts   Cantidad total de segmentos del mensaje completo.
+     * @param partNum      Número de secuencia de este segmento (comienza en 1).
+     * @throws Exception   Si ocurre un error durante el envío SMPP.
+     */
+    private void sendSegment(SmsMessage msg, String parteTexto, byte refNum, byte totalParts, byte partNum) throws Exception {
+        SubmitSm submit = new SubmitSm();
+        submit.setSourceAddress(new Address((byte) 0x01, (byte) 0x01, msg.getSource()));
+        submit.setDestAddress(new Address((byte) 0x01, (byte) 0x01, msg.getDestination()));
 
-            long fin = System.currentTimeMillis();
-            long duracionMs = fin - inicio;
+        byte[] udh = {
+            0x05, 0x00, 0x03, refNum, totalParts, partNum
+        };
 
-            latencyStats.record(duracionMs); // Acumula la estadística
+        byte[] mensajeBytes = parteTexto.getBytes(StandardCharsets.ISO_8859_1);
+        byte[] shortMessage = new byte[udh.length + mensajeBytes.length];
+        System.arraycopy(udh, 0, shortMessage, 0, udh.length);
+        System.arraycopy(mensajeBytes, 0, shortMessage, udh.length, mensajeBytes.length);
 
-            logger.info(String.format("Mensaje enviado a [%s] con IdExterno=[%s] (latencia: %d ms)", msg.getDestination(), resp.getMessageId(), duracionMs));
+        submit.setShortMessage(shortMessage);
+        submit.setDataCoding((byte) 0x00); // GSM-7
+        submit.setEsmClass((byte) 0x40);   // UDH presente
 
-            if (resp.getCommandStatus() == SmppConstants.STATUS_OK) {
+        if (totalParts == 1 && partNum == 1) {
+            logger.info(String.format("Enviar mensaje a [%s]: [%s]", msg.getDestination(), parteTexto));
+        } else {
+            logger.info(String.format("Enviar mensaje %d/%d a [%s]: [%s]", partNum, totalParts, msg.getDestination(), parteTexto));
+        }
+
+        SmppSession session = sessionProvider.get();
+        if (session == null || !session.isBound()) {
+            logger.warn("Sesión SMPP no disponible. No se puede enviar el mensaje.");
+            if (partNum == 1) {
+                dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, 999998, "Sesión no disponible", null);
+            }
+            return;
+        }
+
+        // Medición de latencia de envío
+        long inicio = System.currentTimeMillis();
+        SubmitSmResp resp = session.submit(submit, TIMEOUT_3_SEGUNDOS.toMillis());
+        long duracionMs = System.currentTimeMillis() - inicio;
+        latencyStats.record(duracionMs); // Acumula la estadística
+
+        if (resp.getCommandStatus() == SmppConstants.STATUS_OK) {
+            if (partNum == totalParts)
                 dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.ENVIADO, resp.getCommandStatus(), resp.getResultMessage(), resp.getMessageId());
-            } else {
-                // Dependiendo del tipo de error, se marca como reintento, dejando en estado PENDIENTE_ENVIO
+        } else {
+            if (partNum == 1) {
+                // Dependiendo del tipo de error, se marca como reintento, dejando en estado "Pendiente de Envío"
                 if (CODIGOS_REINTENTOS.contains(resp.getCommandStatus()))
                     dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, resp.getCommandStatus(), resp.getResultMessage(), null);
                 else
                     dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PROCESADO_ERROR, resp.getCommandStatus(), resp.getResultMessage(), null);
             }
-
-        } catch (Exception e) {
-            logger.error(String.format("Error al enviar mensaje: [%s]", e.getMessage()));
-            dbservice.updateMessageStatus(msg.getIdMensaje(), SmsMessage.Status.PENDIENTE_ENVIO, 999999, "Excepción: " + e.getMessage(), null);
-        } finally {
-        	ThreadContext.remove("idMensaje");
-        	ThreadContext.remove("contador");
         }
     }
 
